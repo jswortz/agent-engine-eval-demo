@@ -1,0 +1,5 @@
+- input: paperbanana_inputs/qualitative_insights.mermaid
+  caption: "Qualitative Insights: Custom Evaluation Rubrics & Base Evals"
+
+- input: paperbanana_inputs/bigquery_sink.mermaid
+  caption: "The BigQuery Sink Architecture"

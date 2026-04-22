@@ -1,0 +1,29 @@
+{
+  "batch_id": "batch_20260422_231301_736e44",
+  "manifest": "/usr/local/google/home/jwortz/agent_engine_eval_demo/paperbanana_manifest.yaml",
+  "batch_kind": "methodology",
+  "status": "running",
+  "items": [
+    {
+      "id": "item_1",
+      "caption": "Qualitative Insights: Custom Evaluation Rubrics & Base Evals",
+      "run_id": null,
+      "output_path": null,
+      "iterations": null,
+      "status": "running",
+      "attempts": 1,
+      "input": "/usr/local/google/home/jwortz/agent_engine_eval_demo/graph TD\n    %% Styles\n    classDef input fill:#e1f5fe,stroke:#01579b,stroke-width:2px,color:#01579b;\n    classDef component fill:#fff3e0,stroke:#e65100,stroke-width:2px,color:#e65100;\n    classDef model fill:#f3e5f5,stroke:#4a148c,stroke-width:2px,color:#4a148c;\n    classDef output fill:#e8f5e9,stroke:#1b5e20,stroke-width:2px,color:#1b5e20;\n\n    A[Agent Session Logs]:::input -->|Extract Prompts & Responses| B(Vertex AI EvalTask):::component\n    B --> C{Custom Rubric Node}:::component\n    C -->|Criteria: Helpfulness| D[Rate: 1 to 5]:::output\n    C -->|Criteria: Conciseness| E[Rate: 1 to 5]:::output\n    B --> X[Base Evals]:::component\n    X -->|BLEU / Exact Match| Y[Algorithmic Baseline]:::output\n    D --> F((Final Quality Score)):::model\n    E --> F\n    Y --> F\n"
+    },
+    {
+      "id": "item_2",
+      "caption": "The BigQuery Sink Architecture",
+      "run_id": null,
+      "output_path": null,
+      "iterations": null,
+      "status": "running",
+      "attempts": 1,
+      "input": "/usr/local/google/home/jwortz/agent_engine_eval_demo/sequenceDiagram\n    %%{init: {'theme': 'neutral'}}%%\n    participant Agent as Agent Execution\n    participant OTel as Cloud Trace (OTel)\n    participant Eval as Vertex EvalTask\n    participant BQ as BigQuery (Sink)\n    participant Looker as Looker Dashboards\n    \n    Agent->>OTel: Emit Spans (Latency, Tokens)\n    Agent->>Eval: Send Prompt/Response Pairs\n    Eval-->>Eval: Score via Custom Rubric (1-5 Ratings)\n    Eval->>BQ: pd.DataFrame.to_gbq() append\n    note right of BQ: Data schema includes Timestamp,<br/>Agent_Version, and Eval Scores.\n    Looker->>BQ: Query average scores grouped by time\n    Looker->>OTel: (Optional) Correlate with operational data\n"
+    }
+  ],
+  "total_seconds": 0.0
+}

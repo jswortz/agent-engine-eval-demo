@@ -1,0 +1,15 @@
+sequenceDiagram
+    %%{init: {'theme': 'neutral'}}%%
+    participant Agent as Agent Execution
+    participant OTel as Cloud Trace (OTel)
+    participant Eval as Vertex EvalTask
+    participant BQ as BigQuery (Sink)
+    participant Looker as Looker Dashboards
+    
+    Agent->>OTel: Emit Spans (Latency, Tokens)
+    Agent->>Eval: Send Prompt/Response Pairs
+    Eval-->>Eval: Score via Custom Rubric (1-5 Ratings)
+    Eval->>BQ: pd.DataFrame.to_gbq() append
+    note right of BQ: Data schema includes Timestamp,<br/>Agent_Version, and Eval Scores.
+    Looker->>BQ: Query average scores grouped by time
+    Looker->>OTel: (Optional) Correlate with operational data

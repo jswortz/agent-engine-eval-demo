@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agent Engine Observability & Evals</title>
+    <style>
+        /* Premium Dark Theme */
+        :root {
+            --bg-color: #0f172a;
+            --card-bg: rgba(30, 41, 59, 0.7);
+            --text-color: #f8fafc;
+            --text-muted: #94a3b8;
+            --primary: #6366f1; /* Indigo */
+            --success: #10b981; /* Emerald */
+            --warning: #f59e0b; /* Amber */
+            --accent: #ec4899; /* Pink */
+            --border: rgba(255, 255, 255, 0.1);
+        }
+
+        body {
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 2rem;
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 1rem;
+        }
+
+        h1 {
+            font-size: 2rem;
+            font-weight: 700;
+            background: linear-gradient(to right, #c084fc, #6366f1);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .badge {
+            background: rgba(16, 185, 129, 0.2);
+            color: var(--success);
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            font-size: 0.875rem;
+            font-weight: 600;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 2rem;
+        }
+
+        @media (min-width: 768px) {
+            .grid {
+                grid-template-columns: 1fr 1fr;
+            }
+        }
+
+        .card {
+            background: var(--card-bg);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--border);
+            border-radius: 1rem;
+            padding: 1.5rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+        }
+
+        h2 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin: 0;
+        }
+
+        /* OTel Waterfall Simulation */
+        .waterfall {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .span-row {
+            display: flex;
+            align-items: center;
+            font-size: 0.875rem;
+        }
+
+        .span-name {
+            width: 200px;
+            color: var(--text-muted);
+            font-family: monospace;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .span-bar-container {
+            flex-grow: 1;
+            background: rgba(255, 255, 255, 0.05);
+            height: 1.5rem;
+            border-radius: 0.25rem;
+            position: relative;
+        }
+
+        .span-bar {
+            height: 100%;
+            border-radius: 0.25rem;
+            display: flex;
+            align-items: center;
+            padding-left: 0.5rem;
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: white;
+        }
+
+        .span-bar.root { background: linear-gradient(to right, #6366f1, #a855f7); width: 100%; }
+        .span-bar.react { background: #8b5cf6; width: 80%; margin-left: 5%; }
+        .span-bar.llm1 { background: #ec4899; width: 30%; margin-left: 10%; }
+        .span-bar.tool1 { background: #10b981; width: 20%; margin-left: 40%; }
+        .span-bar.llm2 { background: #ec4899; width: 25%; margin-left: 60%; }
+
+        /* Chart Simulation */
+        .chart-container {
+            height: 200px;
+            display: flex;
+            align-items: flex-end;
+            justify-content: space-between;
+            padding-top: 1rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .bar {
+            width: 12%;
+            background: linear-gradient(to top, #6366f1, #c084fc);
+            border-radius: 0.25rem 0.25rem 0 0;
+            position: relative;
+            transition: height 0.3s ease;
+        }
+
+        .bar::after {
+            content: attr(data-value);
+            position: absolute;
+            top: -1.5rem;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        .bar:hover {
+            background: linear-gradient(to top, #4f46e5, #a855f7);
+        }
+
+        /* Metrics Grid */
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+
+        .metric-card {
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 0.5rem;
+            padding: 1rem;
+            text-align: center;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .metric-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--success);
+        }
+
+        .metric-label {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-top: 0.25rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div>
+                <h1>Agent Engine Dashboard</h1>
+                <p style="color: var(--text-muted); margin: 0;">Operational Telemetry & Evaluation Insights</p>
+            </div>
+            <span class="badge">Live</span>
+        </header>
+
+        <div class="grid">
+            <!-- OTel Trace Card -->
+            <div class="card">
+                <div class="card-header">
+                    <h2>Cloud Trace (OTel)</h2>
+                    <span style="color: var(--text-muted); font-size: 0.875rem;">Span Waterfall</span>
+                </div>
+                <div class="waterfall">
+                    <div class="span-row">
+                        <div class="span-name">finance_agent_query</div>
+                        <div class="span-bar-container">
+                            <div class="span-bar root">1.2s</div>
+                        </div>
+                    </div>
+                    <div class="span-row">
+                        <div class="span-name">└─ react_loop</div>
+                        <div class="span-bar-container">
+                            <div class="span-bar react">950ms</div>
+                        </div>
+                    </div>
+                    <div class="span-row">
+                        <div class="span-name">   ├─ call_gemini</div>
+                        <div class="span-bar-container">
+                            <div class="span-bar llm1">350ms</div>
+                        </div>
+                    </div>
+                    <div class="span-row">
+                        <div class="span-name">   ├─ get_billing_status</div>
+                        <div class="span-bar-container">
+                            <div class="span-bar tool1">200ms</div>
+                        </div>
+                    </div>
+                    <div class="span-row">
+                        <div class="span-name">   └─ call_gemini_final</div>
+                        <div class="span-bar-container">
+                            <div class="span-bar llm2">300ms</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="metrics-grid">
+                    <div class="metric-card">
+                        <div class="metric-value">1.2s</div>
+                        <div class="metric-label">P95 Latency</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value">850</div>
+                        <div class="metric-label">Tokens/Sec</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value">99.9%</div>
+                        <div class="metric-label">Success Rate</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Looker Evals Card -->
+            <div class="card">
+                <div class="card-header">
+                    <h2>Looker Eval Metrics</h2>
+                    <span style="color: var(--text-muted); font-size: 0.875rem;">BigQuery Sink</span>
+                </div>
+                <div class="chart-container">
+                    <div class="bar" style="height: 70%;" data-value="3.5"></div>
+                    <div class="bar" style="height: 75%;" data-value="3.8"></div>
+                    <div class="bar" style="height: 85%;" data-value="4.2"></div>
+                    <div class="bar" style="height: 80%;" data-value="4.0"></div>
+                    <div class="bar" style="height: 90%;" data-value="4.5"></div>
+                    <div class="bar" style="height: 95%;" data-value="4.8"></div>
+                    <div class="bar" style="height: 92%;" data-value="4.6"></div>
+                </div>
+                <div class="metrics-grid">
+                    <div class="metric-card">
+                        <div class="metric-value" style="color: var(--success)">4.6</div>
+                        <div class="metric-label">Avg Quality (1-5)</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value" style="color: var(--success)">92%</div>
+                        <div class="metric-label">Helpfulness</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value" style="color: var(--warning)">78%</div>
+                        <div class="metric-label">Conciseness</div>
+                    </div>
+                </div>
+                <div style="margin-top: 1rem; font-size: 0.75rem; color: var(--text-muted);">
+                    Last updated: 2 minutes ago (Synced from BigQuery dataset: <code>agent_metrics</code>)
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
