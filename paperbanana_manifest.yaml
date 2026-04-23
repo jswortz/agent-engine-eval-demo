@@ -1,5 +1,16 @@
-- input: paperbanana_inputs/qualitative_insights.mermaid
-  caption: "Qualitative Insights: Custom Evaluation Rubrics & Base Evals"
+items:
+  - input: paperbanana_inputs/end_to_end_architecture.txt
+    caption: "End-to-end architecture of the Agent Engine evaluation and reporting pipeline"
+    id: end_to_end_architecture
 
-- input: paperbanana_inputs/bigquery_sink.mermaid
-  caption: "The BigQuery Sink Architecture"
+  - input: paperbanana_inputs/eval_pipeline.txt
+    caption: "Qualitative Insights: Custom Evaluation Rubrics & Base Evals"
+    id: eval_pipeline
+
+  - input: paperbanana_inputs/bigquery_sink.txt
+    caption: "The BigQuery Sink Architecture"
+    id: bigquery_sink
+
+  - input: paperbanana_inputs/otel_tracing.txt
+    caption: "OpenTelemetry span hierarchy for Agent Engine automatic instrumentation"
+    id: otel_tracing

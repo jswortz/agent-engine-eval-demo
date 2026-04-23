@@ -2,6 +2,15 @@
 
 This document details the comprehensive reporting architecture available when building AI agents with [Vertex AI Agent Engine](https://cloud.google.com/vertex-ai/docs/generative-ai/agent-engine). It highlights how standard operational telemetry natively integrates with Cloud Observability via [OpenTelemetry (OTel)](https://opentelemetry.io/), and how custom qualitative evaluations (Model-as-a-Judge rubrics) can be sent to a [BigQuery](https://cloud.google.com/bigquery) sink for extended [Looker](https://looker.com/) dashboarding. You can view traces in the [Google Cloud Console Trace Explorer](https://console.cloud.google.com/traces).
 
+## Architecture at a Glance
+
+The complete pipeline spans four stages — from agent deployment through evaluation to executive dashboarding — with OpenTelemetry tracing running orthogonally across all stages.
+
+![End-to-end Architecture](assets/generated/end_to_end_architecture.png)
+*Figure 1: End-to-end pipeline from agent deployment through traffic generation, evaluation, and BigQuery/Looker reporting.*
+
+---
+
 ## 1. Out-of-the-Box Operational Telemetry (OTel)
 
 Vertex AI Agent Engine is inherently designed with observability as a first-class citizen. It automatically wraps agent steps—including ReAct reasoning loops, LLM generations, and tool invocations—in OpenTelemetry (OTel) spans.
@@ -9,19 +18,27 @@ Vertex AI Agent Engine is inherently designed with observability as a first-clas
 To view active deployments, access the "Deployments on Agent Runtime" section in the Google Cloud Console:
 
 ![Agent Engine Deployments List](assets/agent_engine_list.png)
-*Figure 1: List of deployed agents in the Agent Runtime console.*
+*Figure 2: List of deployed agents in the Agent Runtime console.*
 
 ![Agent Engine Console - Playground](assets/playground_view_1776898348040.png)
-*Figure 2: Detailed view of a deployed agent in the Playground.*
+*Figure 3: Detailed view of a deployed agent in the Playground.*
 
 ### The Trace Waterfall
+
 Because of the seamless OTel integration, developers don't have to write custom tracing code to monitor the operational data of their agents.
 
 ![OTel Cloud Trace Dashboard](assets/cloud_trace_otel_list_1776893680444.png)
-*Figure 3: Representative Cloud Trace developer console illustrating traces.*
+*Figure 4: Representative Cloud Trace developer console illustrating traces.*
 
 ![OTel Trace Detail Waterfall](assets/otel_waterfall.png)
-*Figure 4: Cascading OTel spans for reasoning strategies, tool execution periods, and raw LLM latency timings.*
+*Figure 5: Cascading OTel spans for reasoning strategies, tool execution periods, and raw LLM latency timings.*
+
+### Span Hierarchy Architecture
+
+The following diagram illustrates the hierarchical span structure that Agent Engine creates automatically when telemetry is enabled:
+
+![OTel Span Hierarchy](assets/generated/otel_tracing.png)
+*Figure 6: OpenTelemetry span hierarchy showing automatic instrumentation of reasoning loops, LLM calls, and tool execution.*
 
 **Key Out-of-the-Box Metrics Available:**
 *   **Step-by-Step Latency:** Immediately identify bottlenecks (e.g., distinguishing a Slow API Tool response from pure LLM inference latency).
@@ -37,12 +54,14 @@ While operational telemetry tells you *how fast* the agent is acting, **Evaluati
 Instead of relying solely on exact match base-evals, we use the [Vertex AI Eval](https://cloud.google.com/vertex-ai/docs/generative-ai/eval) service to implement **Model-as-a-Judge** scoring. This pipeline allows you to define qualitative rubrics directly:
 
 ![Qualitative Insights Evaluation Pipeline](assets/eval_pipeline_diagram.png)
+*Figure 7: Qualitative insights evaluation pipeline (console view).*
 
-*Figure 7: Qualitative insights evaluation pipeline flow.*
+![Evaluation Pipeline Architecture](assets/generated/eval_pipeline.png)
+*Figure 8: Evaluation pipeline showing custom rubric scoring (helpfulness and conciseness, rated 1-5) alongside exact-match baseline.*
 
 By scoring offline datasets against a `PointwiseMetricPromptTemplate`, we translate previously unquantifiable text into a strict, trackable numeric scale based on the custom rubric definitions.
 
-For a complete code implementation of running these evaluations and exporting them to BigQuery, refer to the included sample script: [evaluate_and_export.py](file:///usr/local/google/home/jwortz/agent_engine_eval_demo/src/evaluate_and_export.py).
+For a complete code implementation of running these evaluations and exporting them to BigQuery, refer to the included sample script: [`evaluate_and_export.py`](../src/evaluate_and_export.py).
 
 ---
 
@@ -52,19 +71,21 @@ To unlock longitudinal business intelligence, the evaluation results (the numeri
 
 ### The BigQuery Sink Architecture
 
-![BigQuery Sink Architecture](assets/sequence_diagram.png)
+![BigQuery Sink Sequence](assets/sequence_diagram.png)
+*Figure 9: Architecture for sinking evaluation data to BigQuery (console view).*
 
-*Figure 8: Architecture for sinking evaluation data to BigQuery.*
+![BigQuery Sink Data Flow](assets/generated/bigquery_sink.png)
+*Figure 10: Data flow from agent execution through evaluation to BigQuery sink and Looker dashboarding.*
 
 ### Frontend Dashboarding in Action
 
 Once the evaluation scores and operational trace data land in BigQuery (or are pulled from Cloud Monitoring), you can use custom Looker reporting units to visualize success for executive stakeholders.
 
 ![BigQuery Evaluation Metrics Preview](assets/eval-metrics-bq.png)
-*Figure 5: Preview of evaluation results in BigQuery, showing rubric scores and explanations.*
+*Figure 11: Preview of evaluation results in BigQuery, showing rubric scores and explanations.*
 
 ![Looker Eval Metrics UI Example](assets/looker_eval.png)
-*Figure 6: Example of a custom enterprise reporting dashboard in Looker.*
+*Figure 12: Example of a custom enterprise reporting dashboard in Looker.*
 
 ### How We Write Evals to BigQuery
 
@@ -83,8 +104,6 @@ The following Python snippet shows how we use `pandas-gbq` to append evaluation 
     except Exception as e:
         print(f"Failed to push to BigQuery: {e}")
 ```
-
-*Figure 3: Data flow from Vertex AI Eval to BigQuery.*
 
 ### Data Schema Reference (BigQuery Sink)
 
