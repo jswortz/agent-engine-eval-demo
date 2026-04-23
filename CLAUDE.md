@@ -23,6 +23,18 @@ uv run python src/evaluate_and_export.py
 
 # Tests
 uv run pytest tests/
+
+# Online monitor CRUD & testing
+python src/manage_online_monitors.py list
+python src/manage_online_monitors.py test
+python src/manage_online_monitors.py get <evaluator_id>
+python src/manage_online_monitors.py create
+python src/manage_online_monitors.py pause <evaluator_id>
+python src/manage_online_monitors.py resume <evaluator_id>
+python src/manage_online_monitors.py delete <evaluator_id>
+
+# Verify online monitors are working (checks evaluator, traces, logging, monitoring)
+python src/verify_online_monitors.py
 ```
 
 ## Architecture
@@ -49,6 +61,9 @@ OpenTelemetry tracing is enabled automatically by Agent Engine when `GOOGLE_CLOU
 - `src/deploy_agent.py` — Full pipeline: deploy + traffic + eval + BQ export (the main script)
 - `src/evaluate_and_export.py` — Standalone eval + BQ export with reusable `run_evaluation_and_export_to_bq()` function
 - `src/agent.py` — Agent class template (reference; `deploy_agent.py` has its own inline copy with OTel env vars)
+- `src/setup_online_evaluators.py` — Creates online evaluators via v1beta1 API
+- `src/manage_online_monitors.py` — Full CRUD + integration test for online monitors
+- `src/verify_online_monitors.py` — Verifies monitors are active and producing results across all 4 signal layers
 - `src/mock_ui.html` — Static HTML dashboard mockup showing trace waterfall and eval metrics
 - `gemini.md` — Documents which Gemini model versions work and which return 404/access denied
 - `docs/reporting_whitepaper.md` — Whitepaper explaining the OTel + eval + Looker architecture
