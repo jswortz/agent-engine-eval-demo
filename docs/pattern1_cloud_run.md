@@ -1,6 +1,8 @@
-# Agent Engine: 360° Operational & Evaluation Reporting
+# Pattern 1: Cloud Run — Custom Evaluation & BigQuery Reporting
 
-This document details the comprehensive reporting architecture available when building AI agents with [Vertex AI Agent Engine](https://cloud.google.com/vertex-ai/docs/generative-ai/agent-engine). It highlights how standard operational telemetry natively integrates with Cloud Observability via [OpenTelemetry (OTel)](https://opentelemetry.io/), and how custom qualitative evaluations (Model-as-a-Judge rubrics) can be sent to a [BigQuery](https://cloud.google.com/bigquery) sink for extended [Looker](https://looker.com/) dashboarding. You can view traces in the [Google Cloud Console Trace Explorer](https://console.cloud.google.com/traces).
+This document details **Pattern 1** for agent evaluation: deploying a `ReasoningEngine` agent on Vertex AI Agent Engine, scoring it with custom Model-as-a-Judge rubrics via the [Vertex AI Eval](https://cloud.google.com/vertex-ai/docs/generative-ai/eval) service, and sinking results to [BigQuery](https://cloud.google.com/bigquery) for [Looker](https://looker.com/) dashboarding. Operational telemetry is provided out-of-the-box via [OpenTelemetry (OTel)](https://opentelemetry.io/) integration with [Cloud Trace](https://console.cloud.google.com/traces).
+
+> **See also:** [Pattern 2: Agent Runtime with Native OTEL & Monitors](pattern2_agent_runtime.md) — the newer approach using ADK agents, `AdkApp(enable_tracing=True)`, and Online Monitors for continuous automated evaluation.
 
 ## Architecture at a Glance
 

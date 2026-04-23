@@ -4,7 +4,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What This Is
 
-A demo showing the end-to-end workflow for deploying a Vertex AI Agent Engine agent, evaluating it with custom Model-as-a-Judge rubrics, and exporting eval metrics to BigQuery for Looker dashboarding. The agent is a simple finance/billing assistant (`FinanceAgent`).
+Two architecture patterns for agent evaluation on Vertex AI Agent Engine:
+
+- **Pattern 1: Cloud Run** — Custom Model-as-a-Judge rubrics with `EvalTask`, manual BigQuery export via `pandas-gbq`. See `docs/pattern1_cloud_run.md`.
+- **Pattern 2: Agent Runtime** — ADK agents with native OTEL (`AdkApp(enable_tracing=True)`), Online Monitors (automated 10-min eval cycle), Cloud Logging sink to BigQuery. See `docs/pattern2_agent_runtime.md`.
+
+The agent is a simple finance/billing assistant (`FinanceAgent`) used to demonstrate both patterns.
 
 ## Commands
 
@@ -39,14 +44,19 @@ python src/verify_online_monitors.py
 
 ## Architecture
 
-The pipeline has four stages, all orchestrated in `src/deploy_agent.py`:
+### Pattern 1: Cloud Run
+1. Deploy `ReasoningEngine` agent with OTEL env vars
+2. Generate traffic, collect prompt-response pairs
+3. Run custom `EvalTask` with `PointwiseMetric` rubric (helpfulness + conciseness, 1-5 scale)
+4. Export scores to BigQuery via `pandas-gbq`
 
-1. **Agent definition** — ADK agent with `google.adk.agents.Agent`, deployed via `vertexai.agent_engines.AdkApp(enable_tracing=True)`.
-2. **Traffic generation** — Queries the deployed agent via `streamQuery` REST API, collects responses.
-3. **Offline evaluation** (`src/evaluate_and_export.py`) — Uses `vertexai.evaluation.EvalTask` with a custom `PointwiseMetric` rubric (helpfulness + conciseness, scored 1-5) plus `exact_match` baseline. Results → BigQuery (`agent_metrics.eval_rubric_results`).
-4. **Online monitors** — Continuous evaluation via v1beta1 `onlineEvaluators` API. Runs every 10 minutes against OTEL traces, scoring with 4 predefined metrics. Results → Cloud Logging → BigQuery (`online_eval_results` via log sink `online-eval-to-bq`).
+### Pattern 2: Agent Runtime (current focus)
+1. Deploy ADK `Agent` via `AdkApp(enable_tracing=True)` with `vertexai.Client` API
+2. OTEL auto-instruments all spans with `gen_ai.*` semantic conventions
+3. Online Monitors evaluate traces every 10 minutes with 4 predefined metrics (0.0-1.0)
+4. Results flow: Cloud Logging → BigQuery (via log sink `online-eval-to-bq`)
 
-OpenTelemetry tracing is enabled automatically by Agent Engine. Critical env vars for online evaluation:
+Critical env vars for Pattern 2 online evaluation:
 - `OTEL_SEMCONV_STABILITY_OPT_IN=gen_ai_latest_experimental`
 - `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=EVENT_ONLY`
 
@@ -71,8 +81,8 @@ OpenTelemetry tracing is enabled automatically by Agent Engine. Critical env var
 - `src/verify_online_monitors.py` — Verifies monitors are active and producing results across all 4 signal layers
 - `src/mock_ui.html` — Static HTML dashboard mockup showing trace waterfall and eval metrics
 - `gemini.md` — Documents which Gemini model versions work and which return 404/access denied
-- `docs/trends2insights_whitepaper.md` — Whitepaper 2: Agent Engine evaluation & tracing report with online monitors
-- `docs/reporting_whitepaper.md` — Whitepaper 1: OTel + eval + Looker architecture (Cloud Run approach)
+- `docs/pattern1_cloud_run.md` — Pattern 1: Cloud Run — Custom Evaluation & BigQuery Reporting
+- `docs/pattern2_agent_runtime.md` — Pattern 2: Agent Runtime with Native OTEL & Monitors
 - `docs/assets/generated/` — Paperbanana-generated architecture diagrams (end-to-end, OTEL tracing, eval pipeline, online monitor loop)
 
 ## Gotchas

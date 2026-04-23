@@ -1,12 +1,18 @@
-# Agent Engine: Evals and BigQuery Analytics
+# Agent Engine: Evaluation & Observability Patterns
 
-> Deploy a Vertex AI Agent Engine agent, evaluate it with Model-as-a-Judge rubrics, and export metrics to BigQuery for Looker dashboarding.
+> Two architecture patterns for deploying, evaluating, and monitoring AI agents on Vertex AI Agent Engine — from custom Cloud Run evaluation pipelines to native Agent Runtime monitoring.
 
-This repository demonstrates the end-to-end architecture for deploying an AI agent on [Vertex AI Agent Engine](https://cloud.google.com/vertex-ai/docs/generative-ai/agent-engine), scoring its responses with custom qualitative rubrics, and pushing evaluation metrics into [BigQuery](https://cloud.google.com/bigquery) for longitudinal reporting in [Looker](https://looker.com/).
+This repository demonstrates two complementary patterns for agent evaluation on [Vertex AI Agent Engine](https://cloud.google.com/vertex-ai/docs/generative-ai/agent-engine):
 
-## Architecture Overview
-
-The system implements a four-stage pipeline. A `FinanceAgent` is deployed to Vertex AI Agent Engine as a managed `ReasoningEngine`. Test traffic is generated against the deployed agent, and the prompt-response pairs are evaluated using a custom Model-as-a-Judge rubric alongside an exact-match baseline. The scored results are exported to BigQuery, where Looker visualizes quality trends across agent versions over time. OpenTelemetry tracing runs orthogonally, capturing operational spans for every reasoning step, LLM call, and tool execution.
+| | Pattern 1: Cloud Run | Pattern 2: Agent Runtime |
+|:---|:---|:---|
+| **Whitepaper** | [`docs/pattern1_cloud_run.md`](docs/pattern1_cloud_run.md) | [`docs/pattern2_agent_runtime.md`](docs/pattern2_agent_runtime.md) |
+| **Agent Framework** | `ReasoningEngine` class | ADK `Agent` + `AdkApp` |
+| **Evaluation** | Custom Model-as-a-Judge rubrics (on-demand) | Online Monitors (automated, every 10 min) |
+| **Metrics** | Custom `PointwiseMetric` (1-5 scale) | 4 predefined metrics (0.0-1.0 scale) |
+| **Tracing** | OTEL via env vars | Native `AdkApp(enable_tracing=True)` |
+| **BigQuery Sink** | `pandas-gbq` export | Cloud Logging sink (`online-eval-to-bq`) |
+| **Console UI** | Cloud Trace only | Dashboard, Traces, Evaluation tabs |
 
 ![End-to-end Architecture](docs/assets/generated/end_to_end_architecture.png)
 *Figure 1: Complete pipeline from agent deployment through evaluation to BigQuery/Looker reporting.*
@@ -171,19 +177,24 @@ uv run --group diagrams python scripts/generate_diagrams.py
 
 ```
 ├── src/
-│   ├── deploy_agent.py          # Full pipeline: deploy + traffic + eval + BQ export
-│   ├── evaluate_and_export.py   # Standalone eval + BQ export (reusable function)
-│   ├── agent.py                 # Agent class template (reference only)
-│   └── mock_ui.html             # Interactive dashboard mockup (OTel + eval viz)
+│   ├── deploy_agent.py              # Pattern 2: ADK agent deploy + traffic + eval + BQ export
+│   ├── agent.py                     # Agent class template (reference)
+│   ├── setup_online_evaluators.py   # Pattern 2: Create online monitors via v1beta1 API
+│   ├── manage_online_monitors.py    # Pattern 2: Monitor CRUD + integration test
+│   ├── verify_online_monitors.py    # Pattern 2: Verify monitors across 4 signal layers
+│   ├── evaluate_and_export.py       # Pattern 1: Standalone eval + BQ export
+│   ├── api.py                       # Pattern 1: FastAPI endpoints for query/eval
+│   └── whitepaper2_report.html      # Pattern 2: Interactive HTML report
 ├── docs/
-│   ├── reporting_whitepaper.md  # Detailed architecture document
-│   └── assets/                  # Screenshots and generated diagrams
+│   ├── pattern1_cloud_run.md         # Pattern 1: Cloud Run whitepaper
+│   ├── pattern2_agent_runtime.md     # Pattern 2: Agent Runtime whitepaper
+│   └── assets/                      # Screenshots, GIFs, and generated diagrams
 ├── scripts/
-│   └── generate_diagrams.py     # Paperbanana diagram generation script
-├── paperbanana_inputs/          # Text descriptions for diagram generation
-├── pyproject.toml               # Dependencies (uv-managed)
-├── opentelemetry.env            # OTel configuration template
-└── gemini.md                    # Model compatibility notes
+│   └── generate_diagrams.py         # Paperbanana diagram generation
+├── paperbanana_inputs/              # Text inputs for diagram generation
+├── pyproject.toml                   # Dependencies (uv-managed)
+├── opentelemetry.env                # OTel configuration template
+└── gemini.md                        # Model compatibility notes
 ```
 
 ## GCP Configuration
@@ -198,6 +209,7 @@ uv run --group diagrams python scripts/generate_diagrams.py
 
 ## Further Reading
 
+- [Pattern 1: Cloud Run — Custom Evaluation & BigQuery Reporting](docs/pattern1_cloud_run.md)
+- [Pattern 2: Agent Runtime with Native OTEL & Monitors](docs/pattern2_agent_runtime.md)
 - [Vertex AI Agent Engine Documentation](https://cloud.google.com/vertex-ai/docs/generative-ai/agent-engine)
 - [Vertex AI Evaluation Service](https://cloud.google.com/vertex-ai/docs/generative-ai/eval)
-- [Architecture Whitepaper](docs/reporting_whitepaper.md) — detailed breakdown with console screenshots

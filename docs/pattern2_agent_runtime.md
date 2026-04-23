@@ -1,7 +1,9 @@
-# Agent Engine: Evaluation & Tracing Report — Demo Finance Agent ADK
+# Pattern 2: Agent Runtime with Native OTEL & Monitors
 
-This whitepaper presents the complete evaluation and tracing analysis for the **Demo Finance Agent**, an ADK (Agent Development Kit) agent deployed on [Vertex AI Agent Engine](https://cloud.google.com/vertex-ai/docs/generative-ai/agent-engine). It demonstrates how Agent Engine's native [OpenTelemetry](https://opentelemetry.io/) instrumentation provides deep observability into tool-calling agents, how [Online Evaluators](https://cloud.google.com/vertex-ai/docs/generative-ai/agent-engine/evaluate) score every trace automatically, and how [Model-as-a-Judge](https://cloud.google.com/vertex-ai/docs/generative-ai/eval) evaluations are exported to [BigQuery](https://cloud.google.com/bigquery) for longitudinal analysis.
+This document details **Pattern 2** for agent evaluation: deploying an ADK (Agent Development Kit) agent on [Vertex AI Agent Engine](https://cloud.google.com/vertex-ai/docs/generative-ai/agent-engine) with native [OpenTelemetry](https://opentelemetry.io/) instrumentation via `AdkApp(enable_tracing=True)`, continuous automated evaluation via [Online Monitors](https://cloud.google.com/vertex-ai/docs/generative-ai/agent-engine/evaluate), and dual BigQuery sinks for both offline ([Model-as-a-Judge](https://cloud.google.com/vertex-ai/docs/generative-ai/eval)) and online evaluation results.
 
+> **See also:** [Pattern 1: Cloud Run — Custom Evaluation & BigQuery Reporting](pattern1_cloud_run.md) — the simpler approach using custom `EvalTask` rubrics with manual BigQuery export.
+>
 > **Full interactive report:** [`src/whitepaper2_report.html`](../src/whitepaper2_report.html)
 
 ---
