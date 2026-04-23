@@ -5,7 +5,8 @@ description = "Demonstration of Agent Engine + Custom Evals + BigQuery"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "google-cloud-aiplatform[agent-engines,evaluation]>=1.50.0",
+    "google-cloud-aiplatform[agent_engines,adk,evaluation]>=1.112.0",
+    "google-adk>=1.0.0",
     "google-cloud-bigquery>=3.20.1",
     "pandas>=2.0.0",
     "pandas-gbq>=0.22.0",

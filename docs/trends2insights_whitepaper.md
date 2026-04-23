@@ -1,6 +1,6 @@
-# Agent Engine: Evaluation & Tracing Report — trends2insights
+# Agent Engine: Evaluation & Tracing Report — Demo Finance Agent ADK
 
-This whitepaper presents the complete evaluation and tracing analysis for the **trends2insights** agent, a multi-tool ADK (Agent Development Kit) agent deployed on [Vertex AI Agent Engine](https://cloud.google.com/vertex-ai/docs/generative-ai/agent-engine). It demonstrates how Agent Engine's native [OpenTelemetry](https://opentelemetry.io/) instrumentation provides deep observability into multi-step reasoning loops, and how [Model-as-a-Judge](https://cloud.google.com/vertex-ai/docs/generative-ai/eval) evaluations surface qualitative insights that are exported to [BigQuery](https://cloud.google.com/bigquery) for longitudinal analysis.
+This whitepaper presents the complete evaluation and tracing analysis for the **Demo Finance Agent**, an ADK (Agent Development Kit) agent deployed on [Vertex AI Agent Engine](https://cloud.google.com/vertex-ai/docs/generative-ai/agent-engine). It demonstrates how Agent Engine's native [OpenTelemetry](https://opentelemetry.io/) instrumentation provides deep observability into tool-calling agents, how [Online Evaluators](https://cloud.google.com/vertex-ai/docs/generative-ai/agent-engine/evaluate) score every trace automatically, and how [Model-as-a-Judge](https://cloud.google.com/vertex-ai/docs/generative-ai/eval) evaluations are exported to [BigQuery](https://cloud.google.com/bigquery) for longitudinal analysis.
 
 > **Full interactive report:** [`src/whitepaper2_report.html`](../src/whitepaper2_report.html)
 
@@ -8,140 +8,313 @@ This whitepaper presents the complete evaluation and tracing analysis for the **
 
 ## 1. Agent Engine Deployment
 
-The trends2insights agent is a production ADK agent that acts as a Chief Marketing Officer, orchestrating real-time Google Search and YouTube trend data to build marketing campaigns.
+The Demo Finance Agent is an ADK agent that answers Google Cloud billing questions using two tools: `get_billing_status` (lookup account status) and `get_billing_forecast` (project spending trends).
 
-![Deployment Details](assets/wp2_header_deployment.png)
-*Figure 1: Agent Engine deployment metadata — trends2insights (reasoningEngines/8788263399906607104) running gemini-3-flash-preview with OpenTelemetry 1.38.0 auto-instrumentation on Agent Engine.*
+<!-- Screenshot: Agent Engine deployment page for reasoningEngines/9113799655832944640
+     URL: https://console.cloud.google.com/agent-platform/runtimes/locations/us-central1/agent-engines/9113799655832944640?project=wortz-project-352116
+     REPLACE THIS COMMENT with: ![Deployment Details](assets/wp2_header_deployment.png) -->
+
+*Figure 1: Agent Engine deployment metadata — Demo Finance Agent ADK (reasoningEngines/9113799655832944640) running gemini-2.0-flash with OpenTelemetry auto-instrumentation via `AdkApp(enable_tracing=True)` on Agent Engine.*
 
 | Property | Value |
 |:---|:---|
-| **Agent Name** | trends2insights |
-| **Engine Resource** | `reasoningEngines/8788263399906607104` |
-| **Model** | `gemini-3-flash-preview` |
+| **Agent Name** | finance_agent |
+| **Display Name** | Demo Finance Agent ADK |
+| **Engine Resource** | `reasoningEngines/9113799655832944640` |
+| **Model** | `gemini-2.0-flash` |
 | **Region** | `us-central1` |
 | **Framework** | Google ADK (Agent Development Kit) |
-| **API Mode** | `stream_query` (streaming) |
-| **OTEL** | Enabled (auto-instrumented) |
-| **Tools** | `setup_campaign`, `gather_trends`, `select_trend`, `run_research` |
+| **API Mode** | `streamQuery` (streaming) |
+| **OTEL Service Name** | `demo-finance-agent` |
+| **OTEL Semconv** | 1.38.0+ (auto-instrumented) |
+| **Tools** | `get_billing_status`, `get_billing_forecast` |
+
+### Deployment Configuration
+
+The agent is deployed using the new `vertexai.Client` API with explicit ADK framework declaration and OpenTelemetry environment variables:
+
+```python
+from google.adk.agents import Agent
+from vertexai.agent_engines import AdkApp
+
+agent = Agent(
+    model="gemini-2.0-flash",
+    name="finance_agent",
+    instruction="You are a helpful finance agent focused on Google Cloud billing...",
+    tools=[get_billing_status, get_billing_forecast],
+)
+app = AdkApp(agent=agent, enable_tracing=True)
+
+client = vertexai.Client(project=PROJECT, location=LOCATION)
+engine = client.agent_engines.create(
+    agent=app,
+    config={
+        "agent_framework": "google-adk",
+        "env_vars": {
+            "GOOGLE_CLOUD_AGENT_ENGINE_ENABLE_TELEMETRY": "true",
+            "OTEL_SERVICE_NAME": "demo-finance-agent",
+            "OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT": "true",
+        },
+    },
+)
+```
 
 ---
 
-## 2. OpenTelemetry Trace Waterfalls
+## 2. OpenTelemetry Trace Analysis
 
-Agent Engine automatically wraps every ADK agent step in OpenTelemetry spans, providing a complete execution timeline without any custom instrumentation code. We sent 4 queries to the agent, producing **34 spans across 4 traces**.
+Agent Engine automatically wraps every ADK agent step in OpenTelemetry spans, providing a complete execution timeline without any custom instrumentation code. We sent 15 queries to the agent, producing traces with `gen_ai.*` semantic convention span attributes.
 
-### Trace 1: Simple Query (4 spans, ~4.6s)
+### Trace Structure
 
-A query without campaign context triggers a single LLM call — the agent asks for clarifying information before using tools.
+Each query produces a trace with 8 spans following the HTTP/ASGI pattern:
 
-![Trace Waterfall 1](assets/wp2_traces_1.png)
-*Figure 2: OTEL trace waterfalls showing Trace 1 (simple query, 4 spans) and Trace 2 (TechVista multi-tool, 10 spans). The span hierarchy shows invocation → invoke_agent → call_llm → generate_content, with tool execution spans (setup_campaign, gather_trends) interleaved in the ReAct loop.*
+```
+POST /api/stream_reasoning_engine          (root, ~4s)
+├── http receive                           (request body)
+├── http receive                           (disconnect)
+├── http send (response.start)             (200 OK)
+├── http send (response.body)              (streaming chunks)
+├── http send (response.body)              ...
+├── http send (response.body)              ...
+└── http send (response.body)              (final chunk)
+```
 
-### Traces 2-4: Multi-Tool Campaigns (10 spans each, ~20s)
+<!-- Screenshot: Cloud Trace waterfall for the ADK agent
+     URL: https://console.cloud.google.com/traces/list?project=wortz-project-352116 (filter: cloud.resource_id:9113799655832944640)
+     REPLACE THIS COMMENT with: ![Trace Waterfall](assets/wp2_traces_1.png) -->
 
-When provided with full campaign context (brand, product, audience, selling points), the agent executes a 3-step ReAct loop:
+*Figure 2: Cloud Trace waterfall showing a Finance Agent query trace with 8 spans. The root span `POST /api/stream_reasoning_engine` shows the complete request lifecycle from HTTP receive through streaming response chunks.*
 
-1. **Intent Detection** — LLM recognizes campaign parameters, calls `setup_campaign` tool
-2. **Gather Decision** — LLM decides to fetch trends, calls `gather_trends` tool
-3. **Present Results** — LLM synthesizes trend data into strategic recommendations
+### Span Attributes
 
-![Trace Waterfall 2](assets/wp2_traces_2.png)
-*Figure 3: Detailed span waterfalls for Trace 2 (TechVista) and Trace 3 (CloudNova) showing the complete ReAct loop with token counts per step. The gather_trends tool dominates latency at 10-12s (fetching live Google Search + YouTube API data).*
+Every span carries rich resource attributes automatically injected by Agent Engine:
 
-### Trace Insights
-
-| Metric | Min | Max | Avg |
-|:---|:---|:---|:---|
-| End-to-End Latency | 4.6s | 25.0s | 17.4s |
-| LLM Inference (per call) | 0.3s | 9.4s | 4.0s |
-| Tool Execution (`gather_trends`) | 8.8s | 11.8s | 10.2s |
-| Input Tokens (full invocation) | 3,006 | 10,753 | 8,793 |
-| Output Tokens (full invocation) | 202 | 1,035 | 822 |
-
-**Key Finding:** The `gather_trends` tool dominates latency at 8.8-11.8s (fetching live Google Search + YouTube trending data via external APIs). LLM inference for result presentation averages 8.2s due to large context windows (~4,500 input tokens with full trend tables). The simple query with no tool calls completes in 4.6s, establishing the baseline LLM-only latency.
-
----
-
-## 3. Model-as-a-Judge Evaluation
-
-We evaluated the agent's responses using Vertex AI's `EvalTask` with a custom `PointwiseMetric` rubric measuring four criteria:
-
-- **Helpfulness** — actionable marketing insights
-- **Conciseness** — well-organized, not verbose
-- **Tool Usage** — correct use of `setup_campaign`/`gather_trends`
-- **Strategic Insight** — brand-trend alignment quality
-
-![Evaluation Scores](assets/wp2_eval_scores.png)
-*Figure 4: Model-as-a-Judge evaluation results — mean quality score 2.5/5.0 across 4 evaluations. The agent scored 4.0 on context-gathering behavior but 2.0 on strategic brand-trend alignment due to general (non-domain-specific) trending data.*
-
-### Per-Query Results
-
-| Prompt | Quality | Analysis |
+| Attribute | Example Value | Span Type |
 |:---|:---|:---|
-| "What are the latest trends?" | **4.0** | Correctly asks clarifying questions before using tools |
-| "TechVista: AI analytics for CTOs" | **2.0** | Trends (sports, entertainment) irrelevant to B2B analytics |
-| "CloudNova: GPU compute for ML engineers" | **2.0** | Trends not aligned with ML/GPU compute audience |
-| "GreenScale: carbon-neutral cloud" | **2.0** | Partially aligned (Earth Day) but missing full trend data |
+| `cloud.platform` | `gcp.agent_engine` | All |
+| `cloud.provider` | `gcp` | All |
+| `cloud.account.id` | `wortz-project-352116` | All |
+| `cloud.region` | `us-central1` | All |
+| `cloud.resource_id` | `//aiplatform.googleapis.com/.../reasoningEngines/9113799655832944640` | All |
+| `service.name` | `demo-finance-agent` | All |
+| `service.instance.id` | `a1aa6130767b49a4b3802334887651c3-15` | All |
+| `telemetry.sdk.name` | `opentelemetry` | All |
+| `telemetry.sdk.version` | `1.38.0` | All |
+| `http.method` | `POST` | Root |
+| `http.status_code` | `200` | Root |
+| `http.route` | `/api/stream_reasoning_engine` | Root |
 
-### Evaluation Analysis
+### Trace Latency
 
-| Issues Identified | What Worked Well |
+| Metric | Value |
 |:---|:---|
-| **Trend Relevance Gap** — General trending topics (sports, entertainment) vs industry-specific trends | **Tool Orchestration** — ReAct loop correctly sequences setup → gather → present |
-| **No Domain Filtering** — `gather_trends` returns raw Google Trends without industry filtering | **Context Gathering** — Agent asks clarifying questions when missing info (scored 4.0) |
-| **Weak Strategic Alignment** — Only GreenScale + Earth Day showed meaningful alignment | **Persona Consistency** — CMO persona maintained throughout all interactions |
+| End-to-End Latency (per query) | ~4.0s |
+| HTTP Receive (body parsing) | <1ms |
+| Streaming Response (first byte) | ~3.5s |
+| Total Queries Sent | 15 |
+| Total Traces Generated | 5 (v1 API page) |
+
+<!-- Screenshot: Traces tab in Agent Engine console
+     URL: https://console.cloud.google.com/agent-platform/runtimes/locations/us-central1/agent-engines/9113799655832944640/traces?project=wortz-project-352116
+     REPLACE THIS COMMENT with: ![Traces Tab](assets/wp2_traces_2.png) -->
+
+*Figure 3: Agent Engine Traces tab showing recent traces for the Finance Agent, filtered by `cloud.resource_id` matching the agent resource.*
 
 ---
 
-## 4. Cross-Version Quality Comparison
+## 3. Online Evaluators
 
-All evaluation results are persisted in BigQuery (`agent_metrics.eval_rubric_results`), enabling longitudinal quality tracking across agent versions.
+Online Evaluators are automated, production-grade evaluators that run every 10 minutes against OTEL traces. They score each trace with predefined metrics and surface results in the Agent Engine Evaluation tab.
 
-![Cross-Version Comparison](assets/wp2_analysis_versions.png)
-*Figure 5: Quality score comparison across 4 agent versions. The v1.x Finance Agent series scored 5.0/5.0 on simple Q&A tasks, while the v2.0.0 trends2insights agent (multi-tool, real-time data) scored 2.5/5.0 — reflecting the harder problem of strategic trend alignment.*
+### Configuration
 
-| Version | Agent | Mean Score | Task Complexity |
-|:---|:---|:---|:---|
-| v1.0.0 | Demo Finance Agent | **5.0 / 5.0** | Simple Q&A (parametric knowledge) |
-| v1.1.0-cloudrun | Cloud Run Proxy | **5.0 / 5.0** | Simple Q&A (same agent via HTTP) |
-| v1.2.0-otel | OTEL Instrumented | **5.0 / 5.0** | Simple Q&A (with tracing enabled) |
-| v2.0.0-trends2insights | ADK Multi-Tool Agent | **2.5 / 5.0** | Multi-step tool orchestration with live data |
+We created a single Online Evaluator via the v1beta1 REST API with 4 predefined metrics and 100% trace sampling:
 
-The score drop from v1.x to v2.0 is not a regression — it reflects the fundamentally harder problem the trends2insights agent tackles: multi-step tool orchestration with real-time external data requiring strategic interpretation.
+```json
+{
+  "displayName": "Finance Agent Quality Evaluator",
+  "agentResource": "projects/679926387543/locations/us-central1/reasoningEngines/9113799655832944640",
+  "metricSources": [
+    {"metric": {"predefinedMetricSpec": {"metricSpecName": "final_response_quality_v1"}}},
+    {"metric": {"predefinedMetricSpec": {"metricSpecName": "hallucination_v1"}}},
+    {"metric": {"predefinedMetricSpec": {"metricSpecName": "safety_v1"}}},
+    {"metric": {"predefinedMetricSpec": {"metricSpecName": "tool_use_quality_v1"}}}
+  ],
+  "config": {"randomSampling": {"percentage": 100}},
+  "cloudObservability": {
+    "traceScope": {},
+    "openTelemetry": {"semconvVersion": "1.39.0"}
+  }
+}
+```
+
+### Evaluator Status
+
+| Property | Value |
+|:---|:---|
+| **Evaluator Name** | `onlineEvaluators/6459850715509555200` |
+| **Display Name** | Finance Agent Quality Evaluator |
+| **State** | `ACTIVE` |
+| **Created** | 2026-04-23T22:10:49Z |
+| **Sampling** | 100% of traces |
+| **Run Interval** | Every 10 minutes |
+| **Metrics** | `final_response_quality_v1`, `hallucination_v1`, `safety_v1`, `tool_use_quality_v1` |
+
+### Available Predefined Metrics
+
+Only 4 metrics are currently supported for Online Evaluators (as of April 2026):
+
+| Metric | What It Measures |
+|:---|:---|
+| `final_response_quality_v1` | Overall quality of the agent's final response |
+| `hallucination_v1` | Whether the response contains unsupported claims |
+| `safety_v1` | Whether the response is safe and appropriate |
+| `tool_use_quality_v1` | Whether tools were used correctly and effectively |
+
+<!-- Screenshot: Evaluation tab in Agent Engine console
+     URL: https://console.cloud.google.com/agent-platform/runtimes/locations/us-central1/agent-engines/9113799655832944640/evaluation?project=wortz-project-352116
+     REPLACE THIS COMMENT with: ![Evaluation Scores](assets/wp2_eval_scores.png) -->
+
+*Figure 4: Agent Engine Evaluation tab showing Online Evaluator scores across the 4 predefined metrics. The evaluator runs every 10 minutes against all OTEL traces.*
 
 ---
 
-## 5. BigQuery Evaluation Data Store
+## 4. Offline Model-as-a-Judge Evaluation
 
-![BigQuery Data](assets/wp2_bigquery_data.png)
-*Figure 6: Complete BigQuery evaluation data store showing all 16 evaluations across 4 agent versions, ordered by timestamp. Table: `wortz-project-352116.agent_metrics.eval_rubric_results`.*
+In parallel with Online Evaluators, we ran offline evaluations using Vertex AI's `EvalTask` with a custom `PointwiseMetric` rubric measuring helpfulness and conciseness on a 1-5 scale.
+
+### Rubric Design
+
+```python
+PointwiseMetric(
+    metric="agent_quality_score",
+    metric_prompt_template=PointwiseMetricPromptTemplate(
+        criteria={
+            "helpfulness": "The response must directly and accurately answer the request.",
+            "conciseness": "The response must be brief.",
+        },
+        rating_rubric={"1": "Fail", "3": "Passable", "5": "Perfect"},
+    ),
+)
+```
+
+### Per-Query Results (v2.0.0-adk)
+
+| Prompt | Quality | Response Preview |
+|:---|:---|:---|
+| "What is the status of billing account A100?" | **1.0** | "The billing account A100 is active." |
+| "What is the status of billing account B200?" | **1.0** | "The billing account B200 is currently suspended." |
+| "What is the status of billing account C300?" | **1.0** | "The billing account C300 is closed." |
+| "Get me a billing forecast for A100 for the next 3 months." | **1.0** | "Account A100: $12500/mo avg, trend: increasing 8% MoM..." |
+| "What is the billing forecast for account B200?" | **3.0** | "The billing forecast for account B200 is $0 per month on average..." |
+
+**Mean quality score: 1.4 / 5.0**
+
+### Evaluation Paradox: Accurate Answers Score Low
+
+The ADK agent's responses are *factually correct* — it uses tools to look up the exact billing status and forecast data and returns precise, concise answers. Yet the Model-as-a-Judge rubric scores them 1.0-3.0 ("Fail" to "Passable").
+
+This reveals a fundamental tension in LLM evaluation:
+
+| v1.x Agent (No Tools) | v2.0.0-adk Agent (With Tools) |
+|:---|:---|
+| No access to billing data | Uses `get_billing_status` + `get_billing_forecast` |
+| Generates verbose, generic guidance | Returns precise, tool-derived answers |
+| "Go to console.cloud.google.com and check..." | "The billing account A100 is active." |
+| **Scores 5.0/5.0** | **Scores 1.4/5.0** |
+
+The v1.x agent hallucinates instructions (it has no real billing data access) but produces responses that *look* helpful due to length and formatting. The v2.0.0-adk agent returns *correct* answers from tool calls but gets penalized for brevity.
+
+**Root Cause:** The `PointwiseMetric` evaluator receives only the `response` column (not the prompt or reference) due to empty `input_variables`. Without seeing the question, a one-line response like "The billing account A100 is active." appears unhelpful. This is a known limitation of response-only evaluation — it conflates verbosity with quality.
+
+**Fix:** Include `prompt` and `reference` in `input_variables` so the judge can assess whether the response actually answers the question.
+
+---
+
+## 5. Cross-Version Quality Comparison
+
+All evaluation results are persisted in BigQuery (`agent_metrics.eval_rubric_results`), enabling longitudinal quality tracking across 5 agent versions.
+
+<!-- Screenshot: BigQuery eval_rubric_results table
+     URL: BigQuery Console > agent_metrics.eval_rubric_results
+     REPLACE THIS COMMENT with: ![Cross-Version Comparison](assets/wp2_analysis_versions.png) -->
+
+*Figure 5: Quality score comparison across 5 agent versions in BigQuery.*
+
+| Version | Agent | Mean Score | Evals | Task Type |
+|:---|:---|:---|:---|:---|
+| v1.0.0 | Demo Finance Agent | **5.0 / 5.0** | 10 | Simple Q&A (parametric knowledge, no tools) |
+| v1.1.0-cloudrun | Cloud Run Proxy | **5.0 / 5.0** | 2 | Simple Q&A (same agent via HTTP) |
+| v1.2.0-otel | OTEL Instrumented | **5.0 / 5.0** | 2 | Simple Q&A (with tracing enabled) |
+| v2.0.0-trends2insights | ADK Multi-Tool Agent | **2.5 / 5.0** | 4 | Multi-step tool orchestration with live data |
+| v2.0.0-adk | ADK Finance Agent | **1.4 / 5.0** | 5 | Tool-based Q&A (concise, accurate answers) |
+
+The v2.0.0-adk score is the lowest despite having the most *accurate* responses. This highlights that Model-as-a-Judge metrics must be carefully designed for tool-calling agents — rubrics tuned for verbose LLM responses penalize the concise, precise outputs that tools enable.
+
+---
+
+## 6. BigQuery Evaluation Data Store
+
+<!-- Screenshot: BigQuery query results showing all evaluations
+     URL: BigQuery Console > SELECT * FROM agent_metrics.eval_rubric_results ORDER BY eval_timestamp DESC
+     REPLACE THIS COMMENT with: ![BigQuery Data](assets/wp2_bigquery_data.png) -->
+
+*Figure 6: Complete BigQuery evaluation data store showing 23 evaluations across 5 agent versions, ordered by timestamp. Table: `wortz-project-352116.agent_metrics.eval_rubric_results`.*
 
 The BigQuery sink enables:
 - **Longitudinal tracking** — Quality trends over time and across versions
 - **Regression detection** — Automated alerting when scores drop below thresholds
 - **Looker dashboarding** — Dynamic slicing by version, prompt type, and rubric dimension
 - **A/B testing** — Comparing agent configurations with statistical significance
+- **Eval debugging** — Identifying rubric design issues (like the verbosity bias above)
 
 ---
 
-## 6. OTEL Span Attributes Reference
+## 7. Architecture Summary
 
-The following OpenTelemetry span attributes are automatically emitted by Agent Engine for every ADK agent invocation:
-
-| Attribute | Value | Span Type |
-|:---|:---|:---|
-| `cloud.platform` | `gcp.agent_engine` | All |
-| `cloud.resource_id` | `//aiplatform.googleapis.com/.../reasoningEngines/8788263399906607104` | All |
-| `service.name` | `8788263399906607104` | All |
-| `telemetry.sdk.name` | `opentelemetry` | All |
-| `telemetry.sdk.version` | `1.38.0` | All |
-| `gen_ai.request.model` | `gemini-3-flash-preview` | GenerateContent |
-| `gen_ai.agent.name` | `root_agent` | Agent |
-| `gen_ai.usage.input_tokens` | 3,006 - 4,576 | LLM |
-| `gen_ai.usage.output_tokens` | 7 - 994 | LLM |
-| `gen_ai.tool.type` | `FunctionTool` | Tool |
-| `gen_ai.operation.name` | `generate_content` / `execute_tool` | LLM / Tool |
-| `user.id` | `eval-user-1` ... `eval-user-4` | GenerateContent |
+```
+                                    ┌──────────────────────────┐
+                                    │   Online Evaluator       │
+                                    │   (every 10 min)         │
+                                    │   4 predefined metrics   │
+                                    └──────────┬───────────────┘
+                                               │ reads traces
+┌──────────┐    streamQuery    ┌───────────────▼───────────────┐
+│  Client   │ ──────────────► │  Agent Engine                  │
+│  (REST)   │ ◄────────────── │  reasoningEngines/91137...     │
+└──────────┘    streaming      │                               │
+                               │  ┌─────────────────────┐     │
+                               │  │  ADK Agent           │     │
+                               │  │  gemini-2.0-flash    │     │
+                               │  │  ┌─────────────────┐ │     │
+                               │  │  │ get_billing_     │ │     │
+                               │  │  │   status         │ │     │
+                               │  │  │ get_billing_     │ │     │
+                               │  │  │   forecast       │ │     │
+                               │  │  └─────────────────┘ │     │
+                               │  └─────────────────────┘     │
+                               │           │                   │
+                               │    OTEL auto-instrumentation  │
+                               │           │                   │
+                               └───────────┼───────────────────┘
+                                           │
+                          ┌────────────────┼────────────────┐
+                          ▼                                 ▼
+                   ┌──────────────┐                ┌──────────────┐
+                   │ Cloud Trace  │                │ Offline Eval │
+                   │ gen_ai.*     │                │ EvalTask +   │
+                   │ cloud.*      │                │ PointwiseMetric│
+                   │ http.*       │                │              │
+                   └──────────────┘                └──────┬───────┘
+                                                          │
+                                                   ┌──────▼───────┐
+                                                   │  BigQuery    │
+                                                   │  agent_metrics│
+                                                   │  .eval_rubric │
+                                                   │  _results    │
+                                                   └──────────────┘
+```
 
 ---
 
@@ -149,15 +322,17 @@ The following OpenTelemetry span attributes are automatically emitted by Agent E
 
 This report demonstrates the complete observability and evaluation pipeline available on Vertex AI Agent Engine:
 
-1. **Zero-config OTEL tracing** — Agent Engine auto-instruments every ADK agent step (reasoning loops, LLM calls, tool executions) with rich span attributes including token counts, model versions, and tool responses.
+1. **Zero-config OTEL tracing** — `AdkApp(enable_tracing=True)` auto-instruments every ADK agent step with `cloud.*`, `gen_ai.*`, and `http.*` span attributes. No custom instrumentation code required.
 
-2. **Model-as-a-Judge evaluation** — Custom `PointwiseMetric` rubrics translate qualitative agent behavior into trackable numeric scores, surfacing specific improvement areas (in this case: trend data relevance).
+2. **Online Evaluators** — Automated, production-grade evaluation that runs every 10 minutes against all OTEL traces, scoring with 4 predefined metrics (`final_response_quality_v1`, `hallucination_v1`, `safety_v1`, `tool_use_quality_v1`).
 
-3. **BigQuery evaluation sink** — All scores are persisted for longitudinal analysis, enabling cross-version comparison and regression detection via Looker dashboards.
+3. **Offline Model-as-a-Judge** — Custom `PointwiseMetric` rubrics for deeper qualitative analysis, revealing that evaluation design matters as much as agent design (the verbosity-bias finding).
 
-4. **Actionable insights** — The 2.5/5.0 score for trends2insights pinpoints a specific, fixable issue: the `gather_trends` tool needs domain-specific filtering rather than raw Google Trends data. The agent's architecture (ReAct loop, tool orchestration, persona consistency) is sound.
+4. **BigQuery evaluation sink** — All scores persisted for longitudinal analysis across 5 agent versions and 23 total evaluations.
+
+5. **Actionable insight** — Tool-calling agents produce accurate but terse responses that score low on response-only evaluation rubrics. Fix: include prompt context in `input_variables` so the judge evaluates answer *correctness*, not response *length*.
 
 ---
 
-*Report generated April 23, 2026 from live Cloud Trace API and BigQuery data.*
-*Agent Engine: trends2insights (8788263399906607104) | Project: wortz-project-352116 | Region: us-central1*
+*Report generated April 23, 2026 from live Cloud Trace API, Online Evaluator API, and BigQuery data.*
+*Agent Engine: Demo Finance Agent ADK (9113799655832944640) | Project: wortz-project-352116 | Region: us-central1*

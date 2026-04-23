@@ -1,33 +1,33 @@
-import vertexai
-
-
 def get_billing_status(account_id: str) -> str:
-    """Gets the current status of a billing account."""
-    revenue_lookup = {"A100": "Active", "B200": "Suspended"}
-    return revenue_lookup.get(account_id, "Unknown Account")
+    """Gets the current status of a Google Cloud billing account.
+
+    Args:
+        account_id: The billing account identifier (e.g. 'A100', 'B200').
+
+    Returns:
+        The status string for the account.
+    """
+    statuses = {"A100": "Active", "B200": "Suspended", "C300": "Closed"}
+    return statuses.get(account_id, f"Unknown account: {account_id}")
 
 
-class FinanceAgent:
-    """Agent deployed on Vertex AI Agent Engine."""
+def get_billing_forecast(account_id: str, months: int = 3) -> str:
+    """Gets a billing forecast for a Google Cloud account.
 
-    def __init__(self, project: str, location: str):
-        self.project = project
-        self.location = location
+    Args:
+        account_id: The billing account identifier.
+        months: Number of months to forecast (default 3).
 
-    def set_up(self):
-        import os
-        os.environ["GOOGLE_CLOUD_AGENT_ENGINE_ENABLE_TELEMETRY"] = "true"
-        os.environ["OTEL_SERVICE_NAME"] = "demo-finance-agent"
-        os.environ["OTEL_PYTHON_LOGGING_AUTO_INSTRUMENTATION_ENABLED"] = "true"
-        os.environ["OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT"] = "true"
-
-        import vertexai
-        from vertexai.generative_models import GenerativeModel
-        vertexai.init(project=self.project, location=self.location)
-        self.model_name = "gemini-2.5-flash"
-        self.model = GenerativeModel(self.model_name)
-        self.system_prompt = "You are a helpful finance agent focused on Google Cloud billing."
-
-    def query(self, prompt: str) -> str:
-        response = self.model.generate_content([self.system_prompt, prompt])
-        return response.text
+    Returns:
+        A forecast summary string.
+    """
+    forecasts = {
+        "A100": {"monthly_avg": 12500, "trend": "increasing 8% MoM"},
+        "B200": {"monthly_avg": 0, "trend": "suspended"},
+        "C300": {"monthly_avg": 0, "trend": "closed"},
+    }
+    info = forecasts.get(account_id)
+    if not info:
+        return f"No forecast data for account {account_id}"
+    projected = info["monthly_avg"] * months
+    return f"Account {account_id}: ${info['monthly_avg']}/mo avg, trend: {info['trend']}, {months}-month projection: ${projected}"
