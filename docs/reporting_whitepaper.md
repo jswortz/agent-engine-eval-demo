@@ -84,3 +84,29 @@ The final unified export to BigQuery enables dynamic slicing. Here is the standa
 | `exact_match` | **INT** | Base eval baseline (0 or 1) compared against ground truth. | Vertex Eval Base |
 
 This resulting architecture fulfills the holistic reporting requirement, uniting the rigorous quantitative trace pipelines of standard OpenTelemetry with the qualitative, human-like intelligence of custom AI evaluation rubrics, all surfaced in a shareable BigQuery/Looker frontend reporting suite.
+
+---
+
+## 4. Live Deployment Results
+
+The following screenshots are from a live deployment of the Demo Finance Agent on Vertex AI Agent Engine with full OpenTelemetry instrumentation (Agent Engine resource: `reasoningEngines/2628053242466009088`, model: `gemini-2.5-flash`, region: `us-central1`).
+
+### Agent Engine Deployment & Evaluation Summary
+
+![Deployment Summary](assets/deployment_summary_live.png)
+*Figure 5: Live Agent Engine deployment showing active status, OTEL instrumentation packages, and evaluation summary (quality score 5.0/5.0 across 12 evaluations with 5 OTEL traces captured).*
+
+### Cloud Trace: OTEL Span Waterfall
+
+![OTEL Trace Waterfall](assets/otel_waterfall_live.png)
+*Figure 6: Real Cloud Trace span waterfall from trace `26d68840ca9412d1`. The root span `POST /api/reasoning_engine` (19.67s) contains the gRPC `GenerateContent` call (19.64s) to Gemini 2.5 Flash, demonstrating that LLM inference dominates latency. All spans are auto-instrumented via OpenTelemetry with attributes including `service.name: demo-finance-agent`, `cloud.platform: gcp.agent_engine`, and `rpc.grpc.status_code: 0 (OK)`.*
+
+### BigQuery: Evaluation Results
+
+![BigQuery Eval Results](assets/bq_eval_results_live.png)
+*Figure 7: Evaluation results from BigQuery table `agent_metrics.eval_rubric_results` showing Model-as-a-Judge quality scores across three agent versions (v1.0.0, v1.1.0-cloudrun, v1.2.0-otel). All versions score 5.0/5.0 on the custom helpfulness+conciseness rubric.*
+
+### Full Deployment Report
+
+![Full Report](assets/live_report_full.png)
+*Figure 8: Complete deployment and evaluation report with deployment metadata, OTEL trace waterfall, BigQuery evaluation results, quality score trends by version, and pipeline architecture diagram. All data sourced live from Cloud Trace API and BigQuery.*

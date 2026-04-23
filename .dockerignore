@@ -1,0 +1,9 @@
+.git/
+.venv/
+__pycache__/
+*.pyc
+.env
+docs/
+outputs/
+paperbanana_inputs/
+paperbanana_outputs/

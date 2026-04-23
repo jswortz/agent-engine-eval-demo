@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agent Engine: Live Deployment Report</title>
+    <style>
+        :root {
+            --bg: #0f172a;
+            --card: rgba(30, 41, 59, 0.85);
+            --text: #f1f5f9;
+            --muted: #94a3b8;
+            --primary: #6366f1;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --accent: #ec4899;
+            --border: rgba(255,255,255,0.08);
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            padding: 2rem;
+        }
+        .container { max-width: 1280px; margin: 0 auto; }
+        header {
+            display: flex; justify-content: space-between; align-items: center;
+            border-bottom: 1px solid var(--border); padding-bottom: 1.25rem; margin-bottom: 2rem;
+        }
+        h1 {
+            font-size: 1.75rem; font-weight: 700;
+            background: linear-gradient(135deg, #c084fc, #6366f1);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        }
+        .subtitle { color: var(--muted); font-size: 0.875rem; margin-top: 0.25rem; }
+        .badge {
+            background: rgba(16,185,129,0.15); color: var(--success);
+            padding: 0.3rem 0.9rem; border-radius: 9999px; font-size: 0.8rem; font-weight: 600;
+        }
+        .badge-warn {
+            background: rgba(245,158,11,0.15); color: var(--warning);
+            padding: 0.2rem 0.6rem; border-radius: 9999px; font-size: 0.7rem; font-weight: 600;
+        }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem; }
+        .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; }
+        .card {
+            background: var(--card); backdrop-filter: blur(16px);
+            border: 1px solid var(--border); border-radius: 0.75rem; padding: 1.25rem;
+        }
+        .card-full { grid-column: 1 / -1; }
+        .card-header {
+            display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;
+        }
+        h2 { font-size: 1rem; font-weight: 600; }
+        h3 { font-size: 0.875rem; font-weight: 600; color: var(--muted); margin-bottom: 0.5rem; }
+
+        .metric-row { display: flex; gap: 1rem; margin-bottom: 0.75rem; }
+        .metric {
+            background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05);
+            border-radius: 0.5rem; padding: 0.75rem 1rem; text-align: center; flex: 1;
+        }
+        .metric-value { font-size: 1.5rem; font-weight: 700; }
+        .metric-label { font-size: 0.7rem; color: var(--muted); margin-top: 0.15rem; text-transform: uppercase; letter-spacing: 0.05em; }
+        .green { color: var(--success); }
+        .purple { color: #a78bfa; }
+        .pink { color: var(--accent); }
+        .amber { color: var(--warning); }
+
+        .waterfall { display: flex; flex-direction: column; gap: 0.5rem; }
+        .span-row { display: flex; align-items: center; font-size: 0.8rem; }
+        .span-name {
+            width: 280px; color: var(--muted); font-family: 'JetBrains Mono', 'Fira Code', monospace;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 0.75rem;
+        }
+        .span-bar-bg {
+            flex-grow: 1; background: rgba(255,255,255,0.04);
+            height: 1.4rem; border-radius: 0.2rem; position: relative; overflow: hidden;
+        }
+        .span-bar {
+            height: 100%; border-radius: 0.2rem; display: flex; align-items: center;
+            padding-left: 0.5rem; font-size: 0.65rem; font-weight: 600; color: white;
+        }
+        .span-bar.root { background: linear-gradient(90deg, #6366f1, #a855f7); width: 100%; }
+        .span-bar.receive { background: #8b5cf6; width: 0.5%; margin-left: 0.5%; }
+        .span-bar.grpc { background: linear-gradient(90deg, #ec4899, #f43f5e); width: 98%; margin-left: 0.5%; }
+        .span-bar.send1 { background: #10b981; width: 0.3%; margin-left: 99%; }
+        .span-bar.send2 { background: #10b981; width: 0.2%; margin-left: 99.3%; }
+
+        .span-dur { width: 70px; text-align: right; color: var(--muted); font-size: 0.7rem; font-family: monospace; }
+        .span-label {
+            display: inline-block; padding: 0.1rem 0.4rem; border-radius: 0.2rem;
+            font-size: 0.6rem; font-weight: 600; margin-left: 0.5rem;
+        }
+        .span-label.ok { background: rgba(16,185,129,0.2); color: var(--success); }
+        .span-label.grpc-label { background: rgba(236,72,153,0.2); color: var(--accent); }
+
+        table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+        th {
+            text-align: left; padding: 0.5rem 0.75rem; color: var(--muted);
+            border-bottom: 1px solid var(--border); font-weight: 600; font-size: 0.7rem;
+            text-transform: uppercase; letter-spacing: 0.05em;
+        }
+        td {
+            padding: 0.5rem 0.75rem; border-bottom: 1px solid rgba(255,255,255,0.03);
+            vertical-align: top;
+        }
+        tr:hover td { background: rgba(255,255,255,0.02); }
+        .score-pill {
+            display: inline-block; padding: 0.15rem 0.5rem; border-radius: 0.25rem;
+            font-weight: 700; font-size: 0.75rem;
+        }
+        .score-5 { background: rgba(16,185,129,0.2); color: var(--success); }
+        .score-3 { background: rgba(245,158,11,0.2); color: var(--warning); }
+
+        .info-grid { display: grid; grid-template-columns: 140px 1fr; gap: 0.25rem 1rem; font-size: 0.8rem; }
+        .info-label { color: var(--muted); }
+        .info-value { font-family: monospace; font-size: 0.75rem; }
+
+        .tag {
+            display: inline-block; padding: 0.15rem 0.4rem; border-radius: 0.2rem;
+            font-size: 0.65rem; font-weight: 500; margin: 0.1rem;
+            background: rgba(99,102,241,0.15); color: #a5b4fc;
+        }
+        .footer { text-align: center; color: var(--muted); font-size: 0.7rem; margin-top: 2rem; padding-top: 1rem; border-top: 1px solid var(--border); }
+    </style>
+</head>
+<body>
+<div class="container">
+    <header>
+        <div>
+            <h1>Agent Engine: Deployment & Evaluation Report</h1>
+            <div class="subtitle">Vertex AI Agent Runtime &bull; wortz-project-352116 &bull; us-central1</div>
+        </div>
+        <span class="badge">DEPLOYED</span>
+    </header>
+
+    <!-- Deployment Info -->
+    <div class="grid">
+        <div class="card">
+            <div class="card-header">
+                <h2>Agent Engine Deployment</h2>
+                <span class="badge">Active</span>
+            </div>
+            <div class="info-grid">
+                <span class="info-label">Display Name</span>
+                <span class="info-value">Demo Finance Agent OTEL</span>
+                <span class="info-label">Resource ID</span>
+                <span class="info-value">reasoningEngines/2628053242466009088</span>
+                <span class="info-label">Model</span>
+                <span class="info-value">gemini-2.5-flash</span>
+                <span class="info-label">Region</span>
+                <span class="info-value">us-central1</span>
+                <span class="info-label">OTEL Service</span>
+                <span class="info-value">demo-finance-agent</span>
+                <span class="info-label">SDK</span>
+                <span class="info-value">opentelemetry-python 1.41.0</span>
+            </div>
+            <div style="margin-top: 0.75rem;">
+                <span class="tag">FastAPI instrumentation</span>
+                <span class="tag">gRPC instrumentation</span>
+                <span class="tag">httpx instrumentation</span>
+                <span class="tag">GenAI instrumentation</span>
+                <span class="tag">GCP Trace exporter</span>
+                <span class="tag">GCP Logging exporter</span>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h2>Evaluation Summary</h2>
+                <span class="badge-warn">v1.2.0-otel</span>
+            </div>
+            <div class="metric-row">
+                <div class="metric">
+                    <div class="metric-value green">5.0</div>
+                    <div class="metric-label">Quality Score</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-value purple">12</div>
+                    <div class="metric-label">Total Evals</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-value pink">5</div>
+                    <div class="metric-label">OTEL Traces</div>
+                </div>
+            </div>
+            <div class="metric-row">
+                <div class="metric">
+                    <div class="metric-value green">100%</div>
+                    <div class="metric-label">Helpfulness</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-value green">100%</div>
+                    <div class="metric-label">Conciseness</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-value amber">0%</div>
+                    <div class="metric-label">Exact Match</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- OTel Trace Waterfall -->
+    <div class="card" style="margin-bottom: 1.5rem;">
+        <div class="card-header">
+            <h2>Cloud Trace: OTEL Span Waterfall</h2>
+            <span style="color: var(--muted); font-size: 0.75rem;">Trace ID: 26d68840ca9412d1 &bull; 2026-04-23 17:55:14 UTC</span>
+        </div>
+        <div class="waterfall">
+            <div class="span-row">
+                <div class="span-name">POST /api/reasoning_engine</div>
+                <div class="span-bar-bg"><div class="span-bar root">19.67s</div></div>
+                <div class="span-dur">19.67s</div>
+                <span class="span-label ok">200</span>
+            </div>
+            <div class="span-row">
+                <div class="span-name">&nbsp;&nbsp;http receive</div>
+                <div class="span-bar-bg"><div class="span-bar receive"></div></div>
+                <div class="span-dur">0.07ms</div>
+                <span class="span-label ok">ASGI</span>
+            </div>
+            <div class="span-row">
+                <div class="span-name">&nbsp;&nbsp;PredictionService/GenerateContent</div>
+                <div class="span-bar-bg"><div class="span-bar grpc">19.64s</div></div>
+                <div class="span-dur">19.64s</div>
+                <span class="span-label grpc-label">gRPC</span>
+            </div>
+            <div class="span-row">
+                <div class="span-name">&nbsp;&nbsp;http send (response.start)</div>
+                <div class="span-bar-bg"><div class="span-bar send1"></div></div>
+                <div class="span-dur">0.11ms</div>
+                <span class="span-label ok">200</span>
+            </div>
+            <div class="span-row">
+                <div class="span-name">&nbsp;&nbsp;http send (response.body)</div>
+                <div class="span-bar-bg"><div class="span-bar send2"></div></div>
+                <div class="span-dur">0.04ms</div>
+                <span class="span-label ok">ASGI</span>
+            </div>
+        </div>
+        <div style="margin-top: 1rem;">
+            <h3>Trace Attributes</h3>
+            <div style="display: flex; flex-wrap: wrap; gap: 0.25rem;">
+                <span class="tag">service.name: demo-finance-agent</span>
+                <span class="tag">cloud.platform: gcp.agent_engine</span>
+                <span class="tag">rpc.service: PredictionService</span>
+                <span class="tag">rpc.method: GenerateContent</span>
+                <span class="tag">rpc.grpc.status_code: 0 (OK)</span>
+                <span class="tag">telemetry.sdk: opentelemetry-python</span>
+                <span class="tag">cloud.region: us-central1</span>
+                <span class="tag">http.status_code: 200</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- BigQuery Eval Results -->
+    <div class="card" style="margin-bottom: 1.5rem;">
+        <div class="card-header">
+            <h2>BigQuery: Evaluation Results</h2>
+            <span style="color: var(--muted); font-size: 0.75rem;">agent_metrics.eval_rubric_results &bull; 12 rows</span>
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th>Timestamp</th>
+                    <th>Version</th>
+                    <th>Prompt</th>
+                    <th style="text-align:center">Quality</th>
+                    <th style="text-align:center">Exact Match</th>
+                    <th>Explanation (truncated)</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>2026-04-23 17:56</td>
+                    <td><code>v1.2.0-otel</code></td>
+                    <td>What is the status of billing account A100?</td>
+                    <td style="text-align:center"><span class="score-pill score-5">5.0</span></td>
+                    <td style="text-align:center"><span class="score-pill score-3">0.0</span></td>
+                    <td style="color:var(--muted)">The response accurately addresses the user's query about billing account A100...</td>
+                </tr>
+                <tr>
+                    <td>2026-04-23 17:56</td>
+                    <td><code>v1.2.0-otel</code></td>
+                    <td>How do I open a support ticket for GCP?</td>
+                    <td style="text-align:center"><span class="score-pill score-5">5.0</span></td>
+                    <td style="text-align:center"><span class="score-pill score-3">0.0</span></td>
+                    <td style="color:var(--muted)">Perfectly helpful and concise given the complexity. Accurate step-by-step...</td>
+                </tr>
+                <tr>
+                    <td>2026-04-23 17:47</td>
+                    <td><code>v1.1.0-cloudrun</code></td>
+                    <td>What is the status of billing account A100?</td>
+                    <td style="text-align:center"><span class="score-pill score-5">5.0</span></td>
+                    <td style="text-align:center"><span class="score-pill score-3">0.0</span></td>
+                    <td style="color:var(--muted)">The response directly and accurately answers the request about billing...</td>
+                </tr>
+                <tr>
+                    <td>2026-04-23 17:47</td>
+                    <td><code>v1.1.0-cloudrun</code></td>
+                    <td>How do I open a support ticket for GCP?</td>
+                    <td style="text-align:center"><span class="score-pill score-5">5.0</span></td>
+                    <td style="text-align:center"><span class="score-pill score-3">0.0</span></td>
+                    <td style="color:var(--muted)">Comprehensively explains how to open a support ticket with specific billing focus...</td>
+                </tr>
+                <tr>
+                    <td>2026-04-23 17:35</td>
+                    <td><code>v1.0.0</code></td>
+                    <td>What is the status of billing account A100?</td>
+                    <td style="text-align:center"><span class="score-pill score-5">5.0</span></td>
+                    <td style="text-align:center"><span class="score-pill score-3">0.0</span></td>
+                    <td style="color:var(--muted)">Accurately explains how to check billing account status in Cloud Console...</td>
+                </tr>
+                <tr>
+                    <td>2026-04-23 17:35</td>
+                    <td><code>v1.0.0</code></td>
+                    <td>How do I open a support ticket for GCP?</td>
+                    <td style="text-align:center"><span class="score-pill score-5">5.0</span></td>
+                    <td style="text-align:center"><span class="score-pill score-3">0.0</span></td>
+                    <td style="color:var(--muted)">Perfect response. Clear, accurate instructions for opening GCP support tickets...</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Eval Quality Over Time -->
+    <div class="grid">
+        <div class="card">
+            <div class="card-header">
+                <h2>Quality Score by Version</h2>
+            </div>
+            <div style="height: 160px; display: flex; align-items: flex-end; justify-content: space-around; padding-top: 1rem; border-bottom: 1px solid var(--border);">
+                <div style="text-align: center;">
+                    <div style="width: 50px; height: 150px; background: linear-gradient(to top, #6366f1, #a855f7); border-radius: 0.25rem 0.25rem 0 0;" data-value="5.0"></div>
+                    <div style="font-size: 0.65rem; color: var(--muted); margin-top: 0.3rem;">v1.0.0<br>Apr 22</div>
+                </div>
+                <div style="text-align: center;">
+                    <div style="width: 50px; height: 150px; background: linear-gradient(to top, #6366f1, #a855f7); border-radius: 0.25rem 0.25rem 0 0;"></div>
+                    <div style="font-size: 0.65rem; color: var(--muted); margin-top: 0.3rem;">v1.0.0<br>Apr 23 AM</div>
+                </div>
+                <div style="text-align: center;">
+                    <div style="width: 50px; height: 150px; background: linear-gradient(to top, #6366f1, #a855f7); border-radius: 0.25rem 0.25rem 0 0;"></div>
+                    <div style="font-size: 0.65rem; color: var(--muted); margin-top: 0.3rem;">v1.1.0<br>Apr 23</div>
+                </div>
+                <div style="text-align: center;">
+                    <div style="width: 50px; height: 150px; background: linear-gradient(to top, #10b981, #34d399); border-radius: 0.25rem 0.25rem 0 0;"></div>
+                    <div style="font-size: 0.65rem; color: var(--muted); margin-top: 0.3rem;">v1.2.0-otel<br>Apr 23 PM</div>
+                </div>
+            </div>
+            <div style="text-align: center; margin-top: 0.5rem; font-size: 0.7rem; color: var(--muted);">
+                All versions scoring 5.0/5.0 &mdash; Perfect
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h2>Pipeline Architecture</h2>
+            </div>
+            <div style="font-family: monospace; font-size: 0.72rem; line-height: 1.8; color: var(--muted);">
+                <div><span style="color:#a78bfa">FinanceAgent</span></div>
+                <div>&nbsp;&nbsp;|</div>
+                <div>&nbsp;&nbsp;v</div>
+                <div><span style="color:#6366f1">ReasoningEngine.create()</span></div>
+                <div>&nbsp;&nbsp;|&mdash;&mdash; OTEL Instrumentation (auto)</div>
+                <div>&nbsp;&nbsp;|&mdash;&mdash; Cloud Trace export</div>
+                <div>&nbsp;&nbsp;v</div>
+                <div><span style="color:#ec4899">Agent Engine Runtime</span></div>
+                <div>&nbsp;&nbsp;|</div>
+                <div>&nbsp;&nbsp;v</div>
+                <div><span style="color:#f59e0b">engine.query(prompt)</span> &rarr; Traffic</div>
+                <div>&nbsp;&nbsp;|</div>
+                <div>&nbsp;&nbsp;v</div>
+                <div><span style="color:#10b981">EvalTask</span> + PointwiseMetric</div>
+                <div>&nbsp;&nbsp;|&mdash;&mdash; helpfulness (1-5)</div>
+                <div>&nbsp;&nbsp;|&mdash;&mdash; conciseness (1-5)</div>
+                <div>&nbsp;&nbsp;v</div>
+                <div><span style="color:#3b82f6">BigQuery</span> &rarr; <span style="color:#f97316">Looker</span></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="footer">
+        Generated 2026-04-23 17:58 UTC &bull; Project: wortz-project-352116 &bull;
+        Agent Engine Resource: reasoningEngines/2628053242466009088 &bull; Data sourced from Cloud Trace API + BigQuery
+    </div>
+</div>
+</body>
+</html>
