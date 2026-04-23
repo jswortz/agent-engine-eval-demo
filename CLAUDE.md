@@ -41,12 +41,14 @@ python src/verify_online_monitors.py
 
 The pipeline has four stages, all orchestrated in `src/deploy_agent.py`:
 
-1. **Agent definition** (`src/agent.py`) — `FinanceAgent` class with `set_up()` and `query()` methods, deployed as a `ReasoningEngine` on Vertex AI Agent Engine.
-2. **Traffic generation** — Queries the deployed agent with test prompts, collects responses.
-3. **Evaluation** (`src/evaluate_and_export.py`) — Uses `vertexai.evaluation.EvalTask` with a custom `PointwiseMetric` rubric (helpfulness + conciseness, scored 1-5) plus `exact_match` baseline.
-4. **BigQuery export** — Appends scored `metrics_table` DataFrame to `agent_metrics.eval_rubric_results` via `pandas-gbq`.
+1. **Agent definition** — ADK agent with `google.adk.agents.Agent`, deployed via `vertexai.agent_engines.AdkApp(enable_tracing=True)`.
+2. **Traffic generation** — Queries the deployed agent via `streamQuery` REST API, collects responses.
+3. **Offline evaluation** (`src/evaluate_and_export.py`) — Uses `vertexai.evaluation.EvalTask` with a custom `PointwiseMetric` rubric (helpfulness + conciseness, scored 1-5) plus `exact_match` baseline. Results → BigQuery (`agent_metrics.eval_rubric_results`).
+4. **Online monitors** — Continuous evaluation via v1beta1 `onlineEvaluators` API. Runs every 10 minutes against OTEL traces, scoring with 4 predefined metrics. Results → Cloud Logging → BigQuery (`online_eval_results` via log sink `online-eval-to-bq`).
 
-OpenTelemetry tracing is enabled automatically by Agent Engine when `GOOGLE_CLOUD_AGENT_ENGINE_ENABLE_TELEMETRY=true` (set in `opentelemetry.env` and programmatically in `deploy_agent.py`). Traces appear in Cloud Trace without custom instrumentation code.
+OpenTelemetry tracing is enabled automatically by Agent Engine. Critical env vars for online evaluation:
+- `OTEL_SEMCONV_STABILITY_OPT_IN=gen_ai_latest_experimental`
+- `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=EVENT_ONLY`
 
 ## GCP Configuration
 
@@ -54,7 +56,10 @@ OpenTelemetry tracing is enabled automatically by Agent Engine when `GOOGLE_CLOU
 - **Region**: `us-central1`
 - **Model**: `gemini-2.5-flash` (see `gemini.md` for model compatibility notes)
 - **Staging bucket**: `gs://wortz-project-352116-vertex-staging-us-central1`
-- **BigQuery destination**: `agent_metrics.eval_rubric_results`
+- **BigQuery (offline evals)**: `agent_metrics.eval_rubric_results`
+- **BigQuery (online evals)**: `online_eval_results` (via Cloud Logging sink `online-eval-to-bq`)
+- **Active agent**: `reasoningEngines/6686359456680247296` (Demo Finance Agent ADK v2)
+- **Active monitor**: `onlineEvaluators/5991476354263023616` (Finance Agent Quality Evaluator v2)
 
 ## Key Files
 
@@ -66,10 +71,13 @@ OpenTelemetry tracing is enabled automatically by Agent Engine when `GOOGLE_CLOU
 - `src/verify_online_monitors.py` — Verifies monitors are active and producing results across all 4 signal layers
 - `src/mock_ui.html` — Static HTML dashboard mockup showing trace waterfall and eval metrics
 - `gemini.md` — Documents which Gemini model versions work and which return 404/access denied
-- `docs/reporting_whitepaper.md` — Whitepaper explaining the OTel + eval + Looker architecture
+- `docs/trends2insights_whitepaper.md` — Whitepaper 2: Agent Engine evaluation & tracing report with online monitors
+- `docs/reporting_whitepaper.md` — Whitepaper 1: OTel + eval + Looker architecture (Cloud Run approach)
+- `docs/assets/generated/` — Paperbanana-generated architecture diagrams (end-to-end, OTEL tracing, eval pipeline, online monitor loop)
 
 ## Gotchas
 
-- `deploy_agent.py` and `agent.py` each define their own `FinanceAgent` class — the `deploy_agent.py` version is the one that actually gets deployed (it includes OTel env var setup in `set_up()`).
-- `agent.py` still references `gemini-1.5-pro-preview-0409` while `deploy_agent.py` uses the working model `gemini-2.5-flash`. The deploy script is authoritative.
-- Column names from Vertex Eval contain `/` characters — both scripts clean these with `replace('/', '_')` before BigQuery export.
+- `deploy_agent.py` uses the ADK `Agent` + `AdkApp` pattern with `vertexai.Client` API. `agent.py` is an older template with `set_up()`/`query()` methods — the deploy script is authoritative.
+- Column names from Vertex Eval contain `/` characters — scripts clean these with `replace('/', '_')` before BigQuery export.
+- Online monitor results land in Cloud Logging immediately but the Console Evaluation tab reads from Cloud Monitoring, which may lag by several evaluator cycles.
+- Only 4 predefined metrics exist for online monitors: `final_response_quality_v1`, `hallucination_v1`, `safety_v1`, `tool_use_quality_v1`.

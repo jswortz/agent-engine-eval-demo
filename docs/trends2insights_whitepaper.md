@@ -409,48 +409,9 @@ The system has three layers — agent execution, observability, and evaluation �
 
 The Online Monitor closes the loop between trace generation and continuous quality scoring:
 
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                     EVERY 10 MINUTES (fixed)                        │
-│                                                                     │
-│  ┌──────────┐  streamQuery  ┌──────────────────────────────────┐   │
-│  │  Client   │ ───────────► │  Agent Engine                     │   │
-│  │  (REST)   │ ◄─────────── │  reasoningEngines/66863...        │   │
-│  └──────────┘   streaming   │                                   │   │
-│                              │  ADK Agent (gemini-2.0-flash)    │   │
-│                              │  ├── get_billing_status          │   │
-│                              │  └── get_billing_forecast        │   │
-│                              │           │                      │   │
-│                              │    OTEL auto-instrumentation     │   │
-│                              └───────────┼──────────────────────┘   │
-│                                          │                          │
-│                    ┌─────────────────────┼──────────────────┐       │
-│                    ▼                     ▼                  ▼       │
-│             ┌────────────┐      ┌──────────────┐   ┌────────────┐  │
-│             │Cloud Trace │      │Cloud Logging │   │  Cloud     │  │
-│             │ gen_ai.*   │      │ agent logs   │   │ Monitoring │  │
-│             │ cloud.*    │      │              │   │            │  │
-│             └─────┬──────┘      └──────▲───────┘   └─────▲──────┘  │
-│                   │                    │                  │         │
-│          ┌────────▼────────────────────┼──────────────────┼──────┐  │
-│          │    Online Monitor (v1beta1 API)                │      │  │
-│          │    onlineEvaluators/5991476354263023616         │      │  │
-│          │                                                │      │  │
-│          │  1. QUERY   — sample traces from Cloud Trace   │      │  │
-│          │  2. EVALUATE — score with 4 predefined metrics │      │  │
-│          │  3. REPORT  — write verdicts ─────────────────►│      │  │
-│          │               write scores  ──────────────────►│      │  │
-│          └───────────────────────────────────────────────────────┘  │
-│                                                                     │
-└─────────────────────────────────────────────────────────────────────┘
-                                          │
-                    ┌─────────────────────▼──────────────────┐
-                    │         Offline Eval (on-demand)        │
-                    │  EvalTask + PointwiseMetric rubric      │
-                    │  Scores → BigQuery                      │
-                    │  agent_metrics.eval_rubric_results      │
-                    └────────────────────────────────────────┘
-```
+![Online Monitor Loop](assets/generated/online_monitor_loop.png)
+
+*Figure 10: Continuous quality feedback loop — the Online Monitor samples traces and inference events every 10 minutes, scores them with 4 predefined metrics (powered by Gemini), and writes verdicts to Cloud Logging and scores to Cloud Monitoring. The offline evaluation path (left) runs on-demand with custom rubrics and exports to BigQuery.*
 
 **Schedule:** The monitor runs on a **fixed 10-minute cycle** — this is not configurable. Each cycle:
 1. Queries Cloud Trace for new traces matching the agent's `cloud.resource_id`
@@ -462,7 +423,7 @@ The Online Monitor closes the loop between trace generation and continuous quali
 - **Cloud Trace** ← OTEL spans (auto-instrumented, real-time)
 - **Cloud Logging** ← evaluation verdicts (written by monitor, every 10 min)
 - **Cloud Monitoring** ← metric time series (exported from logging, may lag)
-- **BigQuery** ← offline eval scores only (via `pandas-gbq`, on-demand). Online monitor results are **not** automatically exported to BigQuery — a Cloud Logging sink or Log Analytics link is required.
+- **BigQuery** ← offline eval scores via `pandas-gbq` (on-demand) to `agent_metrics.eval_rubric_results`. Online monitor results flow via a Cloud Logging sink (`online-eval-to-bq`) to `online_eval_results` dataset.
 
 ---
 

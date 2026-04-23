@@ -1,0 +1,33 @@
+Online Monitor Loop for Agent Engine Continuous Evaluation
+
+The Online Monitor operates on a fixed 10-minute evaluation cycle that continuously scores agent quality in production. The system has four main components connected in a closed loop.
+
+Component 1 - Agent Engine (center):
+The ADK agent (finance_agent) runs on Vertex AI Agent Engine using gemini-2.0-flash. It has two tools: get_billing_status and get_billing_forecast. When clients send queries via the streamQuery REST API, the agent processes them and returns streaming responses. OpenTelemetry auto-instrumentation (enabled by AdkApp with enable_tracing=True) automatically wraps every agent step in OTEL spans with gen_ai.* semantic convention attributes.
+
+Component 2 - Observability Layer (right side, three backends):
+Every agent invocation generates telemetry that flows to three GCP backends simultaneously:
+- Cloud Trace: Receives OTEL spans with full execution DAG (invocation -> invoke_agent -> call_llm -> generate_content + execute_tool). Spans carry gen_ai.agent.name, gen_ai.request.model, gen_ai.operation.name, gen_ai.usage.input_tokens, gen_ai.usage.output_tokens.
+- Cloud Logging: Receives agent logs and inference events containing gen_ai.client.inference.operation.details with actual prompt/response content (gen_ai.input.messages, gen_ai.output.messages, gen_ai.system_instructions, gen_ai.tool.definitions).
+- Cloud Monitoring: Receives metric time series for latency, token usage, error rates.
+
+Component 3 - Online Monitor (bottom, the evaluation loop):
+The Online Monitor (onlineEvaluators/5991476354263023616) runs every 10 minutes in three phases:
+Phase 1 QUERY: Samples traces from Cloud Trace matching the agent's cloud.resource_id and reads inference events from Cloud Logging. Sampling is configurable (1-100%, we use 100%).
+Phase 2 EVALUATE: Runs 4 predefined metrics against each sampled trace using the Agent Platform Evaluation Service (powered by Gemini). The metrics are: final_response_quality_v1, hallucination_v1, safety_v1, and tool_use_quality_v1. Each metric produces a score (0.0-1.0) with detailed rubric verdicts.
+Phase 3 REPORT: Writes evaluation results back to Cloud Logging (immediate, as gen_ai.evaluation.result entries) and exports numeric scores to Cloud Monitoring time series (may lag by several cycles).
+
+Component 4 - Offline Evaluation Path (left side, separate path):
+In parallel, an offline evaluation path uses Vertex AI EvalTask with custom PointwiseMetric rubrics (helpfulness + conciseness, scored 1-5). Results are exported to BigQuery (agent_metrics.eval_rubric_results) via pandas-gbq for longitudinal analysis across agent versions.
+
+Key data flows and connections:
+- Client -> Agent Engine: streamQuery REST API calls
+- Agent Engine -> Cloud Trace: OTEL spans (automatic)
+- Agent Engine -> Cloud Logging: Agent logs + inference events (automatic)
+- Agent Engine -> Cloud Monitoring: Runtime metrics (automatic)
+- Online Monitor reads from Cloud Trace and Cloud Logging (every 10 min)
+- Online Monitor writes to Cloud Logging (evaluation verdicts) and Cloud Monitoring (scores)
+- Offline Eval reads agent responses, scores them, writes to BigQuery
+- Console Dashboard reads from Cloud Monitoring to display evaluation charts
+
+The diagram should emphasize the cyclical nature of the online monitor: traces flow from the agent to observability backends, the monitor reads those traces, evaluates them, and writes results back to the same observability backends. This creates a continuous quality feedback loop that runs automatically without human intervention.
