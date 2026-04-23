@@ -1,0 +1,830 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Whitepaper 2: Agent Engine Evaluation & Tracing Report — trends2insights</title>
+<style>
+  :root {
+    --gcp-blue: #1a73e8;
+    --gcp-blue-dark: #174ea6;
+    --gcp-green: #0d652d;
+    --gcp-green-light: #34a853;
+    --gcp-red: #d93025;
+    --gcp-yellow: #f9ab00;
+    --gcp-gray: #5f6368;
+    --gcp-bg: #f8f9fa;
+    --gcp-card: #ffffff;
+    --gcp-border: #dadce0;
+    --gcp-shadow: 0 1px 3px rgba(0,0,0,.12), 0 1px 2px rgba(0,0,0,.08);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Google Sans', 'Segoe UI', Roboto, sans-serif; background: var(--gcp-bg); color: #202124; line-height: 1.6; }
+  .container { max-width: 1200px; margin: 0 auto; padding: 24px; }
+
+  /* Header */
+  .header { background: linear-gradient(135deg, #1a73e8 0%, #174ea6 50%, #0d47a1 100%); color: white; padding: 48px 0; margin-bottom: 32px; }
+  .header .container { display: flex; justify-content: space-between; align-items: center; }
+  .header h1 { font-size: 32px; font-weight: 500; margin-bottom: 8px; }
+  .header .subtitle { font-size: 16px; opacity: 0.9; }
+  .header .badge { background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); border-radius: 20px; padding: 6px 16px; font-size: 13px; backdrop-filter: blur(4px); }
+  .header-right { text-align: right; }
+  .header-right .agent-id { font-family: 'Roboto Mono', monospace; font-size: 13px; opacity: 0.8; }
+
+  /* Cards */
+  .card { background: var(--gcp-card); border: 1px solid var(--gcp-border); border-radius: 8px; box-shadow: var(--gcp-shadow); margin-bottom: 24px; overflow: hidden; }
+  .card-header { padding: 20px 24px; border-bottom: 1px solid var(--gcp-border); display: flex; align-items: center; gap: 12px; }
+  .card-header h2 { font-size: 18px; font-weight: 500; color: #202124; }
+  .card-header .icon { width: 24px; height: 24px; }
+  .card-body { padding: 24px; }
+
+  /* Metadata Grid */
+  .meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; }
+  .meta-item { padding: 16px; background: var(--gcp-bg); border-radius: 8px; }
+  .meta-item .label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--gcp-gray); margin-bottom: 4px; }
+  .meta-item .value { font-size: 16px; font-weight: 500; color: #202124; }
+  .meta-item .value.mono { font-family: 'Roboto Mono', monospace; font-size: 13px; }
+
+  /* Score Cards */
+  .score-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; }
+  .score-card { padding: 20px; border-radius: 8px; text-align: center; }
+  .score-card .score-value { font-size: 36px; font-weight: 700; }
+  .score-card .score-label { font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 4px; }
+  .score-card.blue { background: #e8f0fe; color: var(--gcp-blue); }
+  .score-card.green { background: #e6f4ea; color: var(--gcp-green); }
+  .score-card.yellow { background: #fef7e0; color: #e37400; }
+  .score-card.red { background: #fce8e6; color: var(--gcp-red); }
+
+  /* Waterfall Chart */
+  .waterfall { margin: 16px 0; }
+  .waterfall-row { display: flex; align-items: center; margin-bottom: 6px; }
+  .waterfall-label { width: 260px; font-size: 12px; color: var(--gcp-gray); text-align: right; padding-right: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .waterfall-bar-container { flex: 1; height: 24px; position: relative; background: #f1f3f4; border-radius: 4px; }
+  .waterfall-bar { position: absolute; height: 100%; border-radius: 4px; min-width: 2px; display: flex; align-items: center; justify-content: center; font-size: 10px; color: white; font-weight: 500; }
+  .waterfall-bar.invocation { background: #1a73e8; }
+  .waterfall-bar.agent { background: #174ea6; }
+  .waterfall-bar.llm { background: #34a853; }
+  .waterfall-bar.tool { background: #f9ab00; color: #202124; }
+  .waterfall-bar.genai { background: #0d652d; }
+  .waterfall-duration { width: 80px; font-size: 11px; color: var(--gcp-gray); text-align: right; padding-left: 8px; font-family: 'Roboto Mono', monospace; }
+  .waterfall-legend { display: flex; gap: 16px; margin-bottom: 16px; flex-wrap: wrap; }
+  .waterfall-legend-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--gcp-gray); }
+  .waterfall-legend-dot { width: 12px; height: 12px; border-radius: 3px; }
+
+  /* Eval Table */
+  .eval-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .eval-table th { background: var(--gcp-bg); padding: 12px 16px; text-align: left; font-weight: 500; color: var(--gcp-gray); text-transform: uppercase; font-size: 11px; letter-spacing: 0.5px; border-bottom: 2px solid var(--gcp-border); }
+  .eval-table td { padding: 12px 16px; border-bottom: 1px solid var(--gcp-border); vertical-align: top; }
+  .eval-table tr:hover { background: #f8f9fa; }
+  .eval-table .prompt-cell { max-width: 300px; }
+  .eval-table .explanation-cell { max-width: 400px; font-size: 12px; color: var(--gcp-gray); line-height: 1.5; }
+  .score-badge { display: inline-block; padding: 2px 10px; border-radius: 12px; font-weight: 600; font-size: 13px; }
+  .score-badge.high { background: #e6f4ea; color: #0d652d; }
+  .score-badge.mid { background: #fef7e0; color: #e37400; }
+  .score-badge.low { background: #fce8e6; color: #d93025; }
+
+  /* Version Comparison */
+  .version-row { display: grid; grid-template-columns: 180px 1fr; gap: 16px; margin-bottom: 16px; padding: 16px; background: var(--gcp-bg); border-radius: 8px; }
+  .version-label { font-weight: 500; font-size: 14px; }
+  .version-bar-container { display: flex; align-items: center; gap: 12px; }
+  .version-bar { height: 32px; border-radius: 6px; display: flex; align-items: center; padding: 0 12px; color: white; font-weight: 600; font-size: 14px; transition: width 0.5s ease; }
+  .version-bar.perfect { background: linear-gradient(90deg, #34a853, #0d652d); }
+  .version-bar.good { background: linear-gradient(90deg, #1a73e8, #174ea6); }
+  .version-bar.mid { background: linear-gradient(90deg, #f9ab00, #e37400); }
+
+  /* Trace details accordion */
+  .trace-group { margin-bottom: 16px; }
+  .trace-header { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: var(--gcp-bg); border-radius: 8px; cursor: pointer; }
+  .trace-header:hover { background: #e8f0fe; }
+  .trace-header h3 { font-size: 14px; font-weight: 500; }
+  .trace-meta { display: flex; gap: 16px; font-size: 12px; color: var(--gcp-gray); }
+  .trace-meta .tag { background: #e8f0fe; color: var(--gcp-blue); padding: 2px 8px; border-radius: 4px; font-family: 'Roboto Mono', monospace; font-size: 11px; }
+  .trace-content { padding: 16px; }
+
+  /* Section divider */
+  .section-divider { display: flex; align-items: center; gap: 16px; margin: 32px 0; }
+  .section-divider .line { flex: 1; height: 1px; background: var(--gcp-border); }
+  .section-divider .num { background: var(--gcp-blue); color: white; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 600; }
+  .section-divider .text { font-size: 14px; color: var(--gcp-gray); text-transform: uppercase; letter-spacing: 1px; }
+
+  /* Architecture diagram */
+  .arch-flow { display: flex; align-items: center; justify-content: center; gap: 0; padding: 24px 0; flex-wrap: wrap; }
+  .arch-node { padding: 16px 20px; border-radius: 8px; text-align: center; min-width: 140px; }
+  .arch-node .node-title { font-size: 12px; font-weight: 600; margin-bottom: 2px; }
+  .arch-node .node-detail { font-size: 10px; opacity: 0.8; }
+  .arch-node.blue { background: #e8f0fe; color: var(--gcp-blue); border: 1px solid #c5d9f7; }
+  .arch-node.green { background: #e6f4ea; color: var(--gcp-green); border: 1px solid #a8dab5; }
+  .arch-node.yellow { background: #fef7e0; color: #e37400; border: 1px solid #fdd663; }
+  .arch-node.purple { background: #f3e8fd; color: #7627bb; border: 1px solid #d7aefb; }
+  .arch-arrow { font-size: 24px; color: var(--gcp-border); padding: 0 8px; }
+
+  /* Footer */
+  .footer { text-align: center; padding: 32px 0; color: var(--gcp-gray); font-size: 12px; }
+  .footer .timestamp { font-family: 'Roboto Mono', monospace; }
+
+  /* Token stats */
+  .token-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .token-table th { background: var(--gcp-bg); padding: 8px 12px; text-align: left; font-weight: 500; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--gcp-gray); }
+  .token-table td { padding: 8px 12px; border-bottom: 1px solid #f1f3f4; font-family: 'Roboto Mono', monospace; font-size: 12px; }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+  <div class="container">
+    <div>
+      <h1>Agent Engine: Evaluation & Tracing Report</h1>
+      <div class="subtitle">Whitepaper 2 — trends2insights ADK Agent on Vertex AI Agent Engine</div>
+    </div>
+    <div class="header-right">
+      <div class="badge">LIVE DATA</div>
+      <div class="agent-id" style="margin-top:8px">Agent Engine ID: 8788263399906607104</div>
+      <div class="agent-id">Model: gemini-3-flash-preview</div>
+    </div>
+  </div>
+</div>
+
+<div class="container">
+
+<!-- Section 1: Deployment Metadata -->
+<div class="section-divider">
+  <div class="num">1</div>
+  <div class="text">Agent Engine Deployment</div>
+  <div class="line"></div>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <svg class="icon" viewBox="0 0 24 24" fill="var(--gcp-blue)"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+    <h2>Deployment Details</h2>
+  </div>
+  <div class="card-body">
+    <div class="meta-grid">
+      <div class="meta-item">
+        <div class="label">Agent Name</div>
+        <div class="value">trends2insights</div>
+      </div>
+      <div class="meta-item">
+        <div class="label">Agent Engine Resource</div>
+        <div class="value mono">reasoningEngines/8788263399906607104</div>
+      </div>
+      <div class="meta-item">
+        <div class="label">Model</div>
+        <div class="value">gemini-3-flash-preview</div>
+      </div>
+      <div class="meta-item">
+        <div class="label">Region</div>
+        <div class="value">us-central1</div>
+      </div>
+      <div class="meta-item">
+        <div class="label">Framework</div>
+        <div class="value">Google ADK (Agent Development Kit)</div>
+      </div>
+      <div class="meta-item">
+        <div class="label">API Mode</div>
+        <div class="value">stream_query (streaming)</div>
+      </div>
+      <div class="meta-item">
+        <div class="label">OTEL Instrumentation</div>
+        <div class="value" style="color:var(--gcp-green-light)">Enabled (auto)</div>
+      </div>
+      <div class="meta-item">
+        <div class="label">Telemetry SDK</div>
+        <div class="value mono">opentelemetry 1.38.0</div>
+      </div>
+      <div class="meta-item">
+        <div class="label">Agent Tools</div>
+        <div class="value">setup_campaign, gather_trends, select_trend, run_research</div>
+      </div>
+      <div class="meta-item">
+        <div class="label">Agent Persona</div>
+        <div class="value">Chief Marketing Officer</div>
+      </div>
+      <div class="meta-item">
+        <div class="label">Project</div>
+        <div class="value mono">wortz-project-352116</div>
+      </div>
+      <div class="meta-item">
+        <div class="label">Evaluation Date</div>
+        <div class="value">April 23, 2026</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Architecture Flow -->
+<div class="card">
+  <div class="card-header">
+    <svg class="icon" viewBox="0 0 24 24" fill="var(--gcp-blue)"><path d="M22 11V3h-7v3H9V3H2v8h7V8h2v10h4v3h7v-8h-7v3h-2V8h2v3z"/></svg>
+    <h2>Pipeline Architecture</h2>
+  </div>
+  <div class="card-body">
+    <div class="arch-flow">
+      <div class="arch-node blue">
+        <div class="node-title">REST API</div>
+        <div class="node-detail">streamQuery</div>
+      </div>
+      <div class="arch-arrow">&rarr;</div>
+      <div class="arch-node green">
+        <div class="node-title">Agent Engine</div>
+        <div class="node-detail">ADK Runtime</div>
+      </div>
+      <div class="arch-arrow">&rarr;</div>
+      <div class="arch-node purple">
+        <div class="node-title">gemini-3-flash</div>
+        <div class="node-detail">ReAct Loop</div>
+      </div>
+      <div class="arch-arrow">&rarr;</div>
+      <div class="arch-node yellow">
+        <div class="node-title">Tools</div>
+        <div class="node-detail">Trends API</div>
+      </div>
+      <div class="arch-arrow">&rarr;</div>
+      <div class="arch-node green">
+        <div class="node-title">Cloud Trace</div>
+        <div class="node-detail">OTEL Spans</div>
+      </div>
+      <div class="arch-arrow">&rarr;</div>
+      <div class="arch-node blue">
+        <div class="node-title">Vertex Eval</div>
+        <div class="node-detail">Model-as-Judge</div>
+      </div>
+      <div class="arch-arrow">&rarr;</div>
+      <div class="arch-node yellow">
+        <div class="node-title">BigQuery</div>
+        <div class="node-detail">Eval Sink</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- Section 2: OTEL Traces -->
+<div class="section-divider">
+  <div class="num">2</div>
+  <div class="text">OpenTelemetry Trace Waterfalls</div>
+  <div class="line"></div>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <svg class="icon" viewBox="0 0 24 24" fill="var(--gcp-green-light)"><path d="M3 17v2h6v-2H3zM3 5v2h10V5H3zm10 16v-2h8v-2h-8v-2h-2v6h2zM7 9v2H3v2h4v2h2V9H7zm14 4v-2H11v2h10zm-6-4h2V7h4V5h-4V3h-2v6z"/></svg>
+    <h2>Live Cloud Trace Spans (4 traces, 34 spans total)</h2>
+  </div>
+  <div class="card-body">
+    <div class="waterfall-legend">
+      <div class="waterfall-legend-item"><div class="waterfall-legend-dot" style="background:#1a73e8"></div> Invocation</div>
+      <div class="waterfall-legend-item"><div class="waterfall-legend-dot" style="background:#174ea6"></div> Agent</div>
+      <div class="waterfall-legend-item"><div class="waterfall-legend-dot" style="background:#34a853"></div> LLM Call</div>
+      <div class="waterfall-legend-item"><div class="waterfall-legend-dot" style="background:#0d652d"></div> GenerateContent</div>
+      <div class="waterfall-legend-item"><div class="waterfall-legend-dot" style="background:#f9ab00"></div> Tool Execution</div>
+    </div>
+
+    <!-- Trace 1: Simple query -->
+    <div class="trace-group">
+      <div class="trace-header">
+        <h3>Trace 1: "What are the latest trends in cloud computing?"</h3>
+        <div class="trace-meta">
+          <span class="tag">2d9959c8...</span>
+          <span>4 spans</span>
+          <span>~4.6s</span>
+        </div>
+      </div>
+      <div class="trace-content">
+        <div class="waterfall">
+          <div class="waterfall-row">
+            <div class="waterfall-label">invocation</div>
+            <div class="waterfall-bar-container"><div class="waterfall-bar invocation" style="left:0%;width:100%"></div></div>
+            <div class="waterfall-duration">4.6s</div>
+          </div>
+          <div class="waterfall-row">
+            <div class="waterfall-label">invoke_agent root_agent</div>
+            <div class="waterfall-bar-container"><div class="waterfall-bar agent" style="left:5%;width:92%"></div></div>
+            <div class="waterfall-duration">4.2s</div>
+          </div>
+          <div class="waterfall-row">
+            <div class="waterfall-label">call_llm gemini-3-flash-preview</div>
+            <div class="waterfall-bar-container"><div class="waterfall-bar llm" style="left:25%;width:72%"></div></div>
+            <div class="waterfall-duration">3.0s</div>
+          </div>
+          <div class="waterfall-row">
+            <div class="waterfall-label">generate_content</div>
+            <div class="waterfall-bar-container"><div class="waterfall-bar genai" style="left:25%;width:72%"></div></div>
+            <div class="waterfall-duration">3.0s</div>
+          </div>
+        </div>
+        <table class="token-table">
+          <tr><th>Model</th><th>Input Tokens</th><th>Output Tokens</th><th>Total</th></tr>
+          <tr><td>gemini-3-flash-preview</td><td>3,006</td><td>202</td><td>3,208</td></tr>
+        </table>
+      </div>
+    </div>
+
+    <!-- Trace 2: TechVista -->
+    <div class="trace-group">
+      <div class="trace-header">
+        <h3>Trace 2: TechVista — AI Analytics Dashboards</h3>
+        <div class="trace-meta">
+          <span class="tag">5bcf24dd...</span>
+          <span>10 spans</span>
+          <span>~19.5s</span>
+        </div>
+      </div>
+      <div class="trace-content">
+        <div class="waterfall">
+          <div class="waterfall-row">
+            <div class="waterfall-label">invocation</div>
+            <div class="waterfall-bar-container"><div class="waterfall-bar invocation" style="left:0%;width:100%"></div></div>
+            <div class="waterfall-duration">19.5s</div>
+          </div>
+          <div class="waterfall-row">
+            <div class="waterfall-label">invoke_agent root_agent</div>
+            <div class="waterfall-bar-container"><div class="waterfall-bar agent" style="left:2%;width:96%"></div></div>
+            <div class="waterfall-duration">18.5s</div>
+          </div>
+          <div class="waterfall-row">
+            <div class="waterfall-label">call_llm (1) setup intent</div>
+            <div class="waterfall-bar-container"><div class="waterfall-bar llm" style="left:4%;width:12%"></div></div>
+            <div class="waterfall-duration">2.0s</div>
+          </div>
+          <div class="waterfall-row">
+            <div class="waterfall-label">generate_content (1)</div>
+            <div class="waterfall-bar-container"><div class="waterfall-bar genai" style="left:4%;width:12%"></div></div>
+            <div class="waterfall-duration">2.0s</div>
+          </div>
+          <div class="waterfall-row">
+            <div class="waterfall-label">execute_tool setup_campaign</div>
+            <div class="waterfall-bar-container"><div class="waterfall-bar tool" style="left:16%;width:5%"></div></div>
+            <div class="waterfall-duration">1.7s</div>
+          </div>
+          <div class="waterfall-row">
+            <div class="waterfall-label">call_llm (2) gather intent</div>
+            <div class="waterfall-bar-container"><div class="waterfall-bar llm" style="left:21%;width:5%"></div></div>
+            <div class="waterfall-duration">1.0s</div>
+          </div>
+          <div class="waterfall-row">
+            <div class="waterfall-label">generate_content (2)</div>
+            <div class="waterfall-bar-container"><div class="waterfall-bar genai" style="left:21%;width:5%"></div></div>
+            <div class="waterfall-duration">1.0s</div>
+          </div>
+          <div class="waterfall-row">
+            <div class="waterfall-label">execute_tool gather_trends</div>
+            <div class="waterfall-bar-container"><div class="waterfall-bar tool" style="left:26%;width:36%"></div></div>
+            <div class="waterfall-duration">10.1s</div>
+          </div>
+          <div class="waterfall-row">
+            <div class="waterfall-label">call_llm (3) present results</div>
+            <div class="waterfall-bar-container"><div class="waterfall-bar llm" style="left:62%;width:36%"></div></div>
+            <div class="waterfall-duration">7.8s</div>
+          </div>
+          <div class="waterfall-row">
+            <div class="waterfall-label">generate_content (3)</div>
+            <div class="waterfall-bar-container"><div class="waterfall-bar genai" style="left:62%;width:36%"></div></div>
+            <div class="waterfall-duration">7.8s</div>
+          </div>
+        </div>
+        <table class="token-table">
+          <tr><th>Step</th><th>Model</th><th>Input Tokens</th><th>Output Tokens</th></tr>
+          <tr><td>1. Intent Detection</td><td>gemini-3-flash-preview</td><td>3,035</td><td>31</td></tr>
+          <tr><td>2. Gather Decision</td><td>gemini-3-flash-preview</td><td>3,105</td><td>7</td></tr>
+          <tr><td>3. Present Results</td><td>gemini-3-flash-preview</td><td>4,549</td><td>984</td></tr>
+          <tr><td colspan="2"><strong>Total</strong></td><td><strong>10,689</strong></td><td><strong>1,022</strong></td></tr>
+        </table>
+      </div>
+    </div>
+
+    <!-- Trace 3: CloudNova -->
+    <div class="trace-group">
+      <div class="trace-header">
+        <h3>Trace 3: CloudNova — Serverless GPU Compute</h3>
+        <div class="trace-meta">
+          <span class="tag">51afd7b0...</span>
+          <span>10 spans</span>
+          <span>~20.3s</span>
+        </div>
+      </div>
+      <div class="trace-content">
+        <div class="waterfall">
+          <div class="waterfall-row">
+            <div class="waterfall-label">invocation</div>
+            <div class="waterfall-bar-container"><div class="waterfall-bar invocation" style="left:0%;width:100%"></div></div>
+            <div class="waterfall-duration">20.3s</div>
+          </div>
+          <div class="waterfall-row">
+            <div class="waterfall-label">invoke_agent root_agent</div>
+            <div class="waterfall-bar-container"><div class="waterfall-bar agent" style="left:2%;width:96%"></div></div>
+            <div class="waterfall-duration">19.6s</div>
+          </div>
+          <div class="waterfall-row">
+            <div class="waterfall-label">call_llm (1) setup intent</div>
+            <div class="waterfall-bar-container"><div class="waterfall-bar llm" style="left:4%;width:10%"></div></div>
+            <div class="waterfall-duration">1.9s</div>
+          </div>
+          <div class="waterfall-row">
+            <div class="waterfall-label">generate_content (1)</div>
+            <div class="waterfall-bar-container"><div class="waterfall-bar genai" style="left:4%;width:10%"></div></div>
+            <div class="waterfall-duration">1.9s</div>
+          </div>
+          <div class="waterfall-row">
+            <div class="waterfall-label">execute_tool setup_campaign</div>
+            <div class="waterfall-bar-container"><div class="waterfall-bar tool" style="left:14%;width:5%"></div></div>
+            <div class="waterfall-duration">1.1s</div>
+          </div>
+          <div class="waterfall-row">
+            <div class="waterfall-label">call_llm (2) gather intent</div>
+            <div class="waterfall-bar-container"><div class="waterfall-bar llm" style="left:19%;width:4%"></div></div>
+            <div class="waterfall-duration">0.9s</div>
+          </div>
+          <div class="waterfall-row">
+            <div class="waterfall-label">generate_content (2)</div>
+            <div class="waterfall-bar-container"><div class="waterfall-bar genai" style="left:19%;width:4%"></div></div>
+            <div class="waterfall-duration">0.9s</div>
+          </div>
+          <div class="waterfall-row">
+            <div class="waterfall-label">execute_tool gather_trends</div>
+            <div class="waterfall-bar-container"><div class="waterfall-bar tool" style="left:23%;width:34%"></div></div>
+            <div class="waterfall-duration">11.8s</div>
+          </div>
+          <div class="waterfall-row">
+            <div class="waterfall-label">call_llm (3) present results</div>
+            <div class="waterfall-bar-container"><div class="waterfall-bar llm" style="left:57%;width:41%"></div></div>
+            <div class="waterfall-duration">7.5s</div>
+          </div>
+          <div class="waterfall-row">
+            <div class="waterfall-label">generate_content (3)</div>
+            <div class="waterfall-bar-container"><div class="waterfall-bar genai" style="left:57%;width:41%"></div></div>
+            <div class="waterfall-duration">7.5s</div>
+          </div>
+        </div>
+        <table class="token-table">
+          <tr><th>Step</th><th>Model</th><th>Input Tokens</th><th>Output Tokens</th></tr>
+          <tr><td>1. Intent Detection</td><td>gemini-3-flash-preview</td><td>3,040</td><td>34</td></tr>
+          <tr><td>2. Gather Decision</td><td>gemini-3-flash-preview</td><td>3,120</td><td>7</td></tr>
+          <tr><td>3. Present Results</td><td>gemini-3-flash-preview</td><td>4,564</td><td>994</td></tr>
+          <tr><td colspan="2"><strong>Total</strong></td><td><strong>10,724</strong></td><td><strong>1,035</strong></td></tr>
+        </table>
+      </div>
+    </div>
+
+    <!-- Trace 4: GreenScale -->
+    <div class="trace-group">
+      <div class="trace-header">
+        <h3>Trace 4: GreenScale — Carbon-Neutral Cloud</h3>
+        <div class="trace-meta">
+          <span class="tag">1ecbb6a5...</span>
+          <span>10 spans</span>
+          <span>~25.0s</span>
+        </div>
+      </div>
+      <div class="trace-content">
+        <div class="waterfall">
+          <div class="waterfall-row">
+            <div class="waterfall-label">invocation</div>
+            <div class="waterfall-bar-container"><div class="waterfall-bar invocation" style="left:0%;width:100%"></div></div>
+            <div class="waterfall-duration">25.0s</div>
+          </div>
+          <div class="waterfall-row">
+            <div class="waterfall-label">invoke_agent root_agent</div>
+            <div class="waterfall-bar-container"><div class="waterfall-bar agent" style="left:2%;width:96%"></div></div>
+            <div class="waterfall-duration">24.6s</div>
+          </div>
+          <div class="waterfall-row">
+            <div class="waterfall-label">call_llm (1) setup intent</div>
+            <div class="waterfall-bar-container"><div class="waterfall-bar llm" style="left:5%;width:14%"></div></div>
+            <div class="waterfall-duration">3.8s</div>
+          </div>
+          <div class="waterfall-row">
+            <div class="waterfall-label">generate_content (1)</div>
+            <div class="waterfall-bar-container"><div class="waterfall-bar genai" style="left:5%;width:14%"></div></div>
+            <div class="waterfall-duration">3.8s</div>
+          </div>
+          <div class="waterfall-row">
+            <div class="waterfall-label">execute_tool setup_campaign</div>
+            <div class="waterfall-bar-container"><div class="waterfall-bar tool" style="left:17%;width:4%"></div></div>
+            <div class="waterfall-duration">0.9s</div>
+          </div>
+          <div class="waterfall-row">
+            <div class="waterfall-label">call_llm (2) gather intent</div>
+            <div class="waterfall-bar-container"><div class="waterfall-bar llm" style="left:21%;width:2%"></div></div>
+            <div class="waterfall-duration">0.3s</div>
+          </div>
+          <div class="waterfall-row">
+            <div class="waterfall-label">generate_content (2)</div>
+            <div class="waterfall-bar-container"><div class="waterfall-bar genai" style="left:21%;width:2%"></div></div>
+            <div class="waterfall-duration">0.3s</div>
+          </div>
+          <div class="waterfall-row">
+            <div class="waterfall-label">execute_tool gather_trends</div>
+            <div class="waterfall-bar-container"><div class="waterfall-bar tool" style="left:24%;width:35%"></div></div>
+            <div class="waterfall-duration">8.8s</div>
+          </div>
+          <div class="waterfall-row">
+            <div class="waterfall-label">call_llm (3) present results</div>
+            <div class="waterfall-bar-container"><div class="waterfall-bar llm" style="left:62%;width:36%"></div></div>
+            <div class="waterfall-duration">9.4s</div>
+          </div>
+          <div class="waterfall-row">
+            <div class="waterfall-label">generate_content (3)</div>
+            <div class="waterfall-bar-container"><div class="waterfall-bar genai" style="left:62%;width:36%"></div></div>
+            <div class="waterfall-duration">9.4s</div>
+          </div>
+        </div>
+        <table class="token-table">
+          <tr><th>Step</th><th>Model</th><th>Input Tokens</th><th>Output Tokens</th></tr>
+          <tr><td>1. Intent Detection</td><td>gemini-3-flash-preview</td><td>3,045</td><td>37</td></tr>
+          <tr><td>2. Gather Decision</td><td>gemini-3-flash-preview</td><td>3,132</td><td>7</td></tr>
+          <tr><td>3. Present Results</td><td>gemini-3-flash-preview</td><td>4,576</td><td>986</td></tr>
+          <tr><td colspan="2"><strong>Total</strong></td><td><strong>10,753</strong></td><td><strong>1,030</strong></td></tr>
+        </table>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Trace Insights Summary -->
+<div class="card">
+  <div class="card-header">
+    <svg class="icon" viewBox="0 0 24 24" fill="var(--gcp-blue)"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/></svg>
+    <h2>Trace Insights Summary</h2>
+  </div>
+  <div class="card-body">
+    <div class="score-grid">
+      <div class="score-card blue">
+        <div class="score-value">34</div>
+        <div class="score-label">Total Spans</div>
+      </div>
+      <div class="score-card green">
+        <div class="score-value">4</div>
+        <div class="score-label">Traces</div>
+      </div>
+      <div class="score-card yellow">
+        <div class="score-value">8</div>
+        <div class="score-label">Tool Calls</div>
+      </div>
+      <div class="score-card blue">
+        <div class="score-value">12</div>
+        <div class="score-label">LLM Invocations</div>
+      </div>
+    </div>
+    <div style="margin-top:20px">
+      <table class="token-table">
+        <tr><th>Metric</th><th>Min</th><th>Max</th><th>Avg</th></tr>
+        <tr><td>End-to-End Latency</td><td>4.6s</td><td>25.0s</td><td>17.4s</td></tr>
+        <tr><td>LLM Inference (per call)</td><td>0.3s</td><td>9.4s</td><td>4.0s</td></tr>
+        <tr><td>Tool Execution (gather_trends)</td><td>8.8s</td><td>11.8s</td><td>10.2s</td></tr>
+        <tr><td>Input Tokens (full invocation)</td><td>3,006</td><td>10,753</td><td>8,793</td></tr>
+        <tr><td>Output Tokens (full invocation)</td><td>202</td><td>1,035</td><td>822</td></tr>
+      </table>
+    </div>
+    <p style="margin-top:16px; font-size:13px; color:var(--gcp-gray)">
+      <strong>Key Finding:</strong> The <code>gather_trends</code> tool dominates latency at 8.8-11.8s (fetching live Google Search + YouTube trending data via external APIs). LLM inference for result presentation (step 3) averages 8.2s due to large context windows (~4,500 input tokens with full trend tables). The simple query (Trace 1) with no tool calls completes in 4.6s, establishing the baseline LLM-only latency.
+    </p>
+  </div>
+</div>
+
+
+<!-- Section 3: Evaluation Results -->
+<div class="section-divider">
+  <div class="num">3</div>
+  <div class="text">Model-as-a-Judge Evaluation</div>
+  <div class="line"></div>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <svg class="icon" viewBox="0 0 24 24" fill="var(--gcp-yellow)"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>
+    <h2>Evaluation Summary — v2.0.0-trends2insights</h2>
+  </div>
+  <div class="card-body">
+    <div class="score-grid" style="margin-bottom:24px">
+      <div class="score-card yellow">
+        <div class="score-value">2.5</div>
+        <div class="score-label">Mean Quality Score</div>
+      </div>
+      <div class="score-card green">
+        <div class="score-value">4.0</div>
+        <div class="score-label">Best Score</div>
+      </div>
+      <div class="score-card red">
+        <div class="score-value">2.0</div>
+        <div class="score-label">Lowest Score</div>
+      </div>
+      <div class="score-card blue">
+        <div class="score-value">4</div>
+        <div class="score-label">Evaluations Run</div>
+      </div>
+    </div>
+
+    <p style="font-size:13px; color:var(--gcp-gray); margin-bottom:16px">
+      <strong>Rubric Criteria:</strong> helpfulness (actionable marketing insights), conciseness (well-organized), tool_usage (correct use of setup_campaign/gather_trends), strategic_insight (brand-trend alignment). Scale: 1 (Fail) to 5 (Perfect).
+    </p>
+
+    <table class="eval-table">
+      <thead>
+        <tr>
+          <th>Prompt</th>
+          <th>Quality</th>
+          <th>Exact Match</th>
+          <th>Evaluator Explanation</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="prompt-cell">"What are the latest trends in cloud computing?"</td>
+          <td><span class="score-badge high">4.0</span></td>
+          <td><span class="score-badge low">0.0</span></td>
+          <td class="explanation-cell">The AI acts as a CMO, asking crucial clarifying questions (Brand Name, Product Name, Target Audience, Key Selling Points) which demonstrates strong strategic thinking. It correctly defers tool usage until context is provided, avoiding hallucination.</td>
+        </tr>
+        <tr>
+          <td class="prompt-cell">"TechVista: AI-powered analytics dashboards for enterprise CTOs..."</td>
+          <td><span class="score-badge low">2.0</span></td>
+          <td><span class="score-badge low">0.0</span></td>
+          <td class="explanation-cell">The response provides trends but the data is largely irrelevant (sports, entertainment). It fails to provide strategic recommendations that genuinely align with TechVista and CTOs, offering only a weak suggestion about "TSLA stock".</td>
+        </tr>
+        <tr>
+          <td class="prompt-cell">"CloudNova: serverless GPU compute for ML engineers..."</td>
+          <td><span class="score-badge low">2.0</span></td>
+          <td><span class="score-badge low">0.0</span></td>
+          <td class="explanation-cell">Trends provided (sports, music, movies) are largely irrelevant to marketing a serverless GPU compute platform to ML engineers. Strategic recommendations are weak and not aligned with the brand due to the irrelevant data.</td>
+        </tr>
+        <tr>
+          <td class="prompt-cell">"GreenScale: carbon-neutral cloud infrastructure..."</td>
+          <td><span class="score-badge low">2.0</span></td>
+          <td><span class="score-badge low">0.0</span></td>
+          <td class="explanation-cell">Partially addresses the request with a strategic note about Earth Day alignment, but misses the actual trend data tables. Without complete data, strategic insights are speculative and not actionable.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Evaluation Analysis -->
+<div class="card">
+  <div class="card-header">
+    <svg class="icon" viewBox="0 0 24 24" fill="var(--gcp-red)"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>
+    <h2>Evaluation Analysis & Improvement Recommendations</h2>
+  </div>
+  <div class="card-body">
+    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px;">
+      <div style="padding:16px; background:#fce8e6; border-radius:8px; border-left:4px solid var(--gcp-red);">
+        <h3 style="font-size:14px; color:var(--gcp-red); margin-bottom:8px;">Issues Identified</h3>
+        <ul style="font-size:13px; color:#202124; padding-left:20px; line-height:1.8;">
+          <li><strong>Trend Relevance Gap:</strong> The agent surfaces general trending topics (sports, entertainment, music) rather than industry-specific trends relevant to B2B tech brands.</li>
+          <li><strong>No Trend Filtering:</strong> The <code>gather_trends</code> tool returns raw Google Trends / YouTube Trending data without domain-specific filtering.</li>
+          <li><strong>Weak Strategic Alignment:</strong> Only the GreenScale + Earth Day pairing showed meaningful brand-trend alignment.</li>
+        </ul>
+      </div>
+      <div style="padding:16px; background:#e6f4ea; border-radius:8px; border-left:4px solid var(--gcp-green-light);">
+        <h3 style="font-size:14px; color:var(--gcp-green); margin-bottom:8px;">What Worked Well</h3>
+        <ul style="font-size:13px; color:#202124; padding-left:20px; line-height:1.8;">
+          <li><strong>Tool Orchestration:</strong> The ReAct loop correctly sequences setup_campaign &rarr; gather_trends &rarr; present results.</li>
+          <li><strong>Context Gathering:</strong> When missing brand info, the agent correctly asks clarifying questions before proceeding (scored 4.0/5.0).</li>
+          <li><strong>Persona Consistency:</strong> The CMO persona is maintained throughout all interactions.</li>
+          <li><strong>Real-Time Data:</strong> Agent successfully fetches live Google Search and YouTube trending data.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- Section 4: Cross-Version Comparison -->
+<div class="section-divider">
+  <div class="num">4</div>
+  <div class="text">Cross-Version Quality Comparison (BigQuery)</div>
+  <div class="line"></div>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <svg class="icon" viewBox="0 0 24 24" fill="var(--gcp-blue)"><path d="M16 6l2.29 2.29-4.88 4.88-4-4L2 16.59 3.41 18l6-6 4 4 6.3-6.29L22 12V6z"/></svg>
+    <h2>Quality Score by Agent Version</h2>
+  </div>
+  <div class="card-body">
+    <div class="version-row">
+      <div class="version-label">v1.0.0<br><span style="font-size:11px;color:var(--gcp-gray)">Demo Finance Agent</span></div>
+      <div class="version-bar-container">
+        <div class="version-bar perfect" style="width:100%">5.0 / 5.0</div>
+      </div>
+    </div>
+    <div class="version-row">
+      <div class="version-label">v1.1.0-cloudrun<br><span style="font-size:11px;color:var(--gcp-gray)">Cloud Run Proxy</span></div>
+      <div class="version-bar-container">
+        <div class="version-bar perfect" style="width:100%">5.0 / 5.0</div>
+      </div>
+    </div>
+    <div class="version-row">
+      <div class="version-label">v1.2.0-otel<br><span style="font-size:11px;color:var(--gcp-gray)">OTEL Instrumented</span></div>
+      <div class="version-bar-container">
+        <div class="version-bar perfect" style="width:100%">5.0 / 5.0</div>
+      </div>
+    </div>
+    <div class="version-row">
+      <div class="version-label">v2.0.0-trends2insights<br><span style="font-size:11px;color:var(--gcp-gray)">ADK Multi-Tool Agent</span></div>
+      <div class="version-bar-container">
+        <div class="version-bar mid" style="width:50%">2.5 / 5.0</div>
+      </div>
+    </div>
+
+    <div style="margin-top:20px; padding:16px; background:var(--gcp-bg); border-radius:8px;">
+      <h3 style="font-size:14px; margin-bottom:8px;">Analysis</h3>
+      <p style="font-size:13px; color:var(--gcp-gray); line-height:1.6;">
+        The v1.x Finance Agent series scored consistently at 5.0/5.0 on simple Q&A tasks (billing status, support tickets) where the model's parametric knowledge sufficed. The v2.0.0 trends2insights agent tackles a fundamentally harder problem: multi-step tool orchestration with real-time external data. The 2.5/5.0 score reflects the gap between successful tool execution and strategic relevance of the returned data. The agent's architecture (ReAct loop + ADK tools) is sound, but the trend data pipeline needs domain-specific filtering to improve output quality.
+      </p>
+    </div>
+  </div>
+</div>
+
+<!-- Section 5: BigQuery Eval Data -->
+<div class="section-divider">
+  <div class="num">5</div>
+  <div class="text">BigQuery Evaluation Data Store</div>
+  <div class="line"></div>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <svg class="icon" viewBox="0 0 24 24" fill="var(--gcp-blue)"><path d="M20 6h-8l-2-2H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2z"/></svg>
+    <h2>BigQuery: agent_metrics.eval_rubric_results</h2>
+  </div>
+  <div class="card-body">
+    <p style="font-size:13px; color:var(--gcp-gray); margin-bottom:16px;">
+      All evaluation results across all agent versions are persisted in BigQuery for longitudinal analysis. Total rows: <strong>16</strong> (across 4 agent versions). Table: <code>wortz-project-352116.agent_metrics.eval_rubric_results</code>
+    </p>
+    <table class="eval-table">
+      <thead>
+        <tr><th>Timestamp</th><th>Version</th><th>Prompt</th><th>Quality</th><th>Exact Match</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>2026-04-23 18:33</td><td><code>v2.0.0-trends2insights</code></td><td>What are the latest trends...</td><td><span class="score-badge high">4.0</span></td><td>0.0</td></tr>
+        <tr><td>2026-04-23 18:33</td><td><code>v2.0.0-trends2insights</code></td><td>TechVista: AI analytics...</td><td><span class="score-badge low">2.0</span></td><td>0.0</td></tr>
+        <tr><td>2026-04-23 18:33</td><td><code>v2.0.0-trends2insights</code></td><td>CloudNova: serverless GPU...</td><td><span class="score-badge low">2.0</span></td><td>0.0</td></tr>
+        <tr><td>2026-04-23 18:33</td><td><code>v2.0.0-trends2insights</code></td><td>GreenScale: carbon-neutral...</td><td><span class="score-badge low">2.0</span></td><td>0.0</td></tr>
+        <tr style="background:#f1f3f4"><td colspan="5" style="text-align:center; color:var(--gcp-gray); font-size:12px; padding:8px;">--- Previous Agent Versions ---</td></tr>
+        <tr><td>2026-04-23 17:56</td><td><code>v1.2.0-otel</code></td><td>Billing account A100 status</td><td><span class="score-badge high">5.0</span></td><td>0.0</td></tr>
+        <tr><td>2026-04-23 17:56</td><td><code>v1.2.0-otel</code></td><td>Open a GCP support ticket</td><td><span class="score-badge high">5.0</span></td><td>0.0</td></tr>
+        <tr><td>2026-04-23 17:47</td><td><code>v1.1.0-cloudrun</code></td><td>Billing account A100 status</td><td><span class="score-badge high">5.0</span></td><td>0.0</td></tr>
+        <tr><td>2026-04-23 17:47</td><td><code>v1.1.0-cloudrun</code></td><td>Open a GCP support ticket</td><td><span class="score-badge high">5.0</span></td><td>0.0</td></tr>
+        <tr><td>2026-04-23 17:35</td><td><code>v1.0.0</code></td><td>Billing account A100 status</td><td><span class="score-badge high">5.0</span></td><td>0.0</td></tr>
+        <tr><td>2026-04-23 17:35</td><td><code>v1.0.0</code></td><td>Open a GCP support ticket</td><td><span class="score-badge high">5.0</span></td><td>0.0</td></tr>
+        <tr><td>2026-04-23 15:49</td><td><code>v1.0.0</code></td><td>Billing account A100 status</td><td><span class="score-badge high">5.0</span></td><td>0.0</td></tr>
+        <tr><td>2026-04-23 15:49</td><td><code>v1.0.0</code></td><td>Open a GCP support ticket</td><td><span class="score-badge high">5.0</span></td><td>0.0</td></tr>
+        <tr><td>2026-04-22 22:49</td><td><code>v1.0.0</code></td><td>Billing account A100 status</td><td><span class="score-badge high">5.0</span></td><td>0.0</td></tr>
+        <tr><td>2026-04-22 22:49</td><td><code>v1.0.0</code></td><td>Open a GCP support ticket</td><td><span class="score-badge high">5.0</span></td><td>0.0</td></tr>
+        <tr><td>2026-04-22 21:33</td><td><code>v1.0.0</code></td><td>Billing account A100 status</td><td><span class="score-badge high">5.0</span></td><td>1.0</td></tr>
+        <tr><td>2026-04-22 21:33</td><td><code>v1.0.0</code></td><td>Open a GCP support ticket</td><td><span class="score-badge high">5.0</span></td><td>0.0</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Section 6: OTEL Span Attributes -->
+<div class="section-divider">
+  <div class="num">6</div>
+  <div class="text">OTEL Span Attributes Reference</div>
+  <div class="line"></div>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <svg class="icon" viewBox="0 0 24 24" fill="var(--gcp-gray)"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
+    <h2>Key Span Attributes (from Cloud Trace)</h2>
+  </div>
+  <div class="card-body">
+    <table class="token-table">
+      <tr><th>Attribute</th><th>Value</th><th>Span Type</th></tr>
+      <tr><td>cloud.platform</td><td>gcp.agent_engine</td><td>All</td></tr>
+      <tr><td>cloud.provider</td><td>gcp</td><td>All</td></tr>
+      <tr><td>cloud.region</td><td>us-central1</td><td>All</td></tr>
+      <tr><td>cloud.account.id</td><td>wortz-project-352116</td><td>All</td></tr>
+      <tr><td>cloud.resource_id</td><td>//aiplatform.googleapis.com/.../reasoningEngines/8788263399906607104</td><td>All</td></tr>
+      <tr><td>service.name</td><td>8788263399906607104</td><td>All</td></tr>
+      <tr><td>telemetry.sdk.name</td><td>opentelemetry</td><td>All</td></tr>
+      <tr><td>telemetry.sdk.version</td><td>1.38.0</td><td>All</td></tr>
+      <tr><td>gen_ai.system</td><td>gcp.vertex.agent / vertex_ai</td><td>LLM</td></tr>
+      <tr><td>gen_ai.request.model</td><td>gemini-3-flash-preview</td><td>GenerateContent</td></tr>
+      <tr><td>gen_ai.agent.name</td><td>root_agent</td><td>Agent</td></tr>
+      <tr><td>gen_ai.operation.name</td><td>generate_content / execute_tool</td><td>LLM / Tool</td></tr>
+      <tr><td>gen_ai.tool.type</td><td>FunctionTool</td><td>Tool</td></tr>
+      <tr><td>gen_ai.usage.input_tokens</td><td>3,006 - 4,576</td><td>LLM</td></tr>
+      <tr><td>gen_ai.usage.output_tokens</td><td>7 - 994</td><td>LLM</td></tr>
+      <tr><td>gen_ai.response.finish_reasons</td><td>["stop"]</td><td>LLM</td></tr>
+      <tr><td>user.id</td><td>eval-user-1 ... eval-user-4</td><td>GenerateContent</td></tr>
+      <tr><td>gcp.vertex.agent.invocation_id</td><td>e-59aa7865-... (unique per call)</td><td>GenerateContent</td></tr>
+    </table>
+  </div>
+</div>
+
+</div><!-- /container -->
+
+<!-- Footer -->
+<div class="footer">
+  <p>Generated from live Cloud Trace API and BigQuery data</p>
+  <p class="timestamp">Report Generated: 2026-04-23T18:35:00Z | Project: wortz-project-352116</p>
+  <p style="margin-top:8px">Agent Engine: trends2insights (8788263399906607104) | Vertex AI Agent Engine + Google ADK</p>
+</div>
+
+</body>
+</html>
