@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Whitepaper 2: Agent Engine Evaluation & Tracing Report — trends2insights</title>
+<title>Agent Engine: Evaluation & Tracing Report — Demo Finance Agent ADK</title>
 <style>
   :root {
     --gcp-blue: #1a73e8;
@@ -135,12 +135,12 @@
   <div class="container">
     <div>
       <h1>Agent Engine: Evaluation & Tracing Report</h1>
-      <div class="subtitle">Whitepaper 2 — trends2insights ADK Agent on Vertex AI Agent Engine</div>
+      <div class="subtitle">Demo Finance Agent ADK on Vertex AI Agent Engine</div>
     </div>
     <div class="header-right">
       <div class="badge">LIVE DATA</div>
-      <div class="agent-id" style="margin-top:8px">Agent Engine ID: 8788263399906607104</div>
-      <div class="agent-id">Model: gemini-3-flash-preview</div>
+      <div class="agent-id" style="margin-top:8px">Agent Engine ID: 6686359456680247296</div>
+      <div class="agent-id">Model: gemini-2.0-flash</div>
     </div>
   </div>
 </div>
@@ -163,15 +163,15 @@
     <div class="meta-grid">
       <div class="meta-item">
         <div class="label">Agent Name</div>
-        <div class="value">trends2insights</div>
+        <div class="value">Demo Finance Agent ADK</div>
       </div>
       <div class="meta-item">
         <div class="label">Agent Engine Resource</div>
-        <div class="value mono">reasoningEngines/8788263399906607104</div>
+        <div class="value mono">reasoningEngines/6686359456680247296</div>
       </div>
       <div class="meta-item">
         <div class="label">Model</div>
-        <div class="value">gemini-3-flash-preview</div>
+        <div class="value">gemini-2.0-flash</div>
       </div>
       <div class="meta-item">
         <div class="label">Region</div>
@@ -195,11 +195,11 @@
       </div>
       <div class="meta-item">
         <div class="label">Agent Tools</div>
-        <div class="value">setup_campaign, gather_trends, select_trend, run_research</div>
+        <div class="value">get_billing_status, get_billing_forecast</div>
       </div>
       <div class="meta-item">
         <div class="label">Agent Persona</div>
-        <div class="value">Chief Marketing Officer</div>
+        <div class="value">Finance / Billing Assistant</div>
       </div>
       <div class="meta-item">
         <div class="label">Project</div>
@@ -304,7 +304,7 @@
             <div class="waterfall-duration">4.2s</div>
           </div>
           <div class="waterfall-row">
-            <div class="waterfall-label">call_llm gemini-3-flash-preview</div>
+            <div class="waterfall-label">call_llm gemini-2.0-flash</div>
             <div class="waterfall-bar-container"><div class="waterfall-bar llm" style="left:25%;width:72%"></div></div>
             <div class="waterfall-duration">3.0s</div>
           </div>
@@ -316,7 +316,7 @@
         </div>
         <table class="token-table">
           <tr><th>Model</th><th>Input Tokens</th><th>Output Tokens</th><th>Total</th></tr>
-          <tr><td>gemini-3-flash-preview</td><td>3,006</td><td>202</td><td>3,208</td></tr>
+          <tr><td>gemini-2.0-flash</td><td>3,006</td><td>202</td><td>3,208</td></tr>
         </table>
       </div>
     </div>
@@ -386,9 +386,9 @@
         </div>
         <table class="token-table">
           <tr><th>Step</th><th>Model</th><th>Input Tokens</th><th>Output Tokens</th></tr>
-          <tr><td>1. Intent Detection</td><td>gemini-3-flash-preview</td><td>3,035</td><td>31</td></tr>
-          <tr><td>2. Gather Decision</td><td>gemini-3-flash-preview</td><td>3,105</td><td>7</td></tr>
-          <tr><td>3. Present Results</td><td>gemini-3-flash-preview</td><td>4,549</td><td>984</td></tr>
+          <tr><td>1. Intent Detection</td><td>gemini-2.0-flash</td><td>3,035</td><td>31</td></tr>
+          <tr><td>2. Gather Decision</td><td>gemini-2.0-flash</td><td>3,105</td><td>7</td></tr>
+          <tr><td>3. Present Results</td><td>gemini-2.0-flash</td><td>4,549</td><td>984</td></tr>
           <tr><td colspan="2"><strong>Total</strong></td><td><strong>10,689</strong></td><td><strong>1,022</strong></td></tr>
         </table>
       </div>
@@ -459,9 +459,9 @@
         </div>
         <table class="token-table">
           <tr><th>Step</th><th>Model</th><th>Input Tokens</th><th>Output Tokens</th></tr>
-          <tr><td>1. Intent Detection</td><td>gemini-3-flash-preview</td><td>3,040</td><td>34</td></tr>
-          <tr><td>2. Gather Decision</td><td>gemini-3-flash-preview</td><td>3,120</td><td>7</td></tr>
-          <tr><td>3. Present Results</td><td>gemini-3-flash-preview</td><td>4,564</td><td>994</td></tr>
+          <tr><td>1. Intent Detection</td><td>gemini-2.0-flash</td><td>3,040</td><td>34</td></tr>
+          <tr><td>2. Gather Decision</td><td>gemini-2.0-flash</td><td>3,120</td><td>7</td></tr>
+          <tr><td>3. Present Results</td><td>gemini-2.0-flash</td><td>4,564</td><td>994</td></tr>
           <tr><td colspan="2"><strong>Total</strong></td><td><strong>10,724</strong></td><td><strong>1,035</strong></td></tr>
         </table>
       </div>
@@ -532,9 +532,9 @@
         </div>
         <table class="token-table">
           <tr><th>Step</th><th>Model</th><th>Input Tokens</th><th>Output Tokens</th></tr>
-          <tr><td>1. Intent Detection</td><td>gemini-3-flash-preview</td><td>3,045</td><td>37</td></tr>
-          <tr><td>2. Gather Decision</td><td>gemini-3-flash-preview</td><td>3,132</td><td>7</td></tr>
-          <tr><td>3. Present Results</td><td>gemini-3-flash-preview</td><td>4,576</td><td>986</td></tr>
+          <tr><td>1. Intent Detection</td><td>gemini-2.0-flash</td><td>3,045</td><td>37</td></tr>
+          <tr><td>2. Gather Decision</td><td>gemini-2.0-flash</td><td>3,132</td><td>7</td></tr>
+          <tr><td>3. Present Results</td><td>gemini-2.0-flash</td><td>4,576</td><td>986</td></tr>
           <tr><td colspan="2"><strong>Total</strong></td><td><strong>10,753</strong></td><td><strong>1,030</strong></td></tr>
         </table>
       </div>
@@ -595,7 +595,7 @@
 <div class="card">
   <div class="card-header">
     <svg class="icon" viewBox="0 0 24 24" fill="var(--gcp-yellow)"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>
-    <h2>Evaluation Summary — v2.0.0-trends2insights</h2>
+    <h2>Evaluation Summary — v2.0.0-Demo Finance Agent ADK</h2>
   </div>
   <div class="card-body">
     <div class="score-grid" style="margin-bottom:24px">
@@ -722,7 +722,7 @@
       </div>
     </div>
     <div class="version-row">
-      <div class="version-label">v2.0.0-trends2insights<br><span style="font-size:11px;color:var(--gcp-gray)">ADK Multi-Tool Agent</span></div>
+      <div class="version-label">v2.0.0-Demo Finance Agent ADK<br><span style="font-size:11px;color:var(--gcp-gray)">ADK Multi-Tool Agent</span></div>
       <div class="version-bar-container">
         <div class="version-bar mid" style="width:50%">2.5 / 5.0</div>
       </div>
@@ -731,7 +731,7 @@
     <div style="margin-top:20px; padding:16px; background:var(--gcp-bg); border-radius:8px;">
       <h3 style="font-size:14px; margin-bottom:8px;">Analysis</h3>
       <p style="font-size:13px; color:var(--gcp-gray); line-height:1.6;">
-        The v1.x Finance Agent series scored consistently at 5.0/5.0 on simple Q&A tasks (billing status, support tickets) where the model's parametric knowledge sufficed. The v2.0.0 trends2insights agent tackles a fundamentally harder problem: multi-step tool orchestration with real-time external data. The 2.5/5.0 score reflects the gap between successful tool execution and strategic relevance of the returned data. The agent's architecture (ReAct loop + ADK tools) is sound, but the trend data pipeline needs domain-specific filtering to improve output quality.
+        The v1.x Finance Agent series scored consistently at 5.0/5.0 on simple Q&A tasks (billing status, support tickets) where the model's parametric knowledge sufficed. The v2.0.0 Demo Finance Agent ADK agent tackles a fundamentally harder problem: multi-step tool orchestration with real-time external data. The 2.5/5.0 score reflects the gap between successful tool execution and strategic relevance of the returned data. The agent's architecture (ReAct loop + ADK tools) is sound, but the trend data pipeline needs domain-specific filtering to improve output quality.
       </p>
     </div>
   </div>
@@ -758,10 +758,10 @@
         <tr><th>Timestamp</th><th>Version</th><th>Prompt</th><th>Quality</th><th>Exact Match</th></tr>
       </thead>
       <tbody>
-        <tr><td>2026-04-23 18:33</td><td><code>v2.0.0-trends2insights</code></td><td>What are the latest trends...</td><td><span class="score-badge high">4.0</span></td><td>0.0</td></tr>
-        <tr><td>2026-04-23 18:33</td><td><code>v2.0.0-trends2insights</code></td><td>TechVista: AI analytics...</td><td><span class="score-badge low">2.0</span></td><td>0.0</td></tr>
-        <tr><td>2026-04-23 18:33</td><td><code>v2.0.0-trends2insights</code></td><td>CloudNova: serverless GPU...</td><td><span class="score-badge low">2.0</span></td><td>0.0</td></tr>
-        <tr><td>2026-04-23 18:33</td><td><code>v2.0.0-trends2insights</code></td><td>GreenScale: carbon-neutral...</td><td><span class="score-badge low">2.0</span></td><td>0.0</td></tr>
+        <tr><td>2026-04-23 18:33</td><td><code>v2.0.0-Demo Finance Agent ADK</code></td><td>What are the latest trends...</td><td><span class="score-badge high">4.0</span></td><td>0.0</td></tr>
+        <tr><td>2026-04-23 18:33</td><td><code>v2.0.0-Demo Finance Agent ADK</code></td><td>TechVista: AI analytics...</td><td><span class="score-badge low">2.0</span></td><td>0.0</td></tr>
+        <tr><td>2026-04-23 18:33</td><td><code>v2.0.0-Demo Finance Agent ADK</code></td><td>CloudNova: serverless GPU...</td><td><span class="score-badge low">2.0</span></td><td>0.0</td></tr>
+        <tr><td>2026-04-23 18:33</td><td><code>v2.0.0-Demo Finance Agent ADK</code></td><td>GreenScale: carbon-neutral...</td><td><span class="score-badge low">2.0</span></td><td>0.0</td></tr>
         <tr style="background:#f1f3f4"><td colspan="5" style="text-align:center; color:var(--gcp-gray); font-size:12px; padding:8px;">--- Previous Agent Versions ---</td></tr>
         <tr><td>2026-04-23 17:56</td><td><code>v1.2.0-otel</code></td><td>Billing account A100 status</td><td><span class="score-badge high">5.0</span></td><td>0.0</td></tr>
         <tr><td>2026-04-23 17:56</td><td><code>v1.2.0-otel</code></td><td>Open a GCP support ticket</td><td><span class="score-badge high">5.0</span></td><td>0.0</td></tr>
@@ -799,12 +799,12 @@
       <tr><td>cloud.provider</td><td>gcp</td><td>All</td></tr>
       <tr><td>cloud.region</td><td>us-central1</td><td>All</td></tr>
       <tr><td>cloud.account.id</td><td>wortz-project-352116</td><td>All</td></tr>
-      <tr><td>cloud.resource_id</td><td>//aiplatform.googleapis.com/.../reasoningEngines/8788263399906607104</td><td>All</td></tr>
-      <tr><td>service.name</td><td>8788263399906607104</td><td>All</td></tr>
+      <tr><td>cloud.resource_id</td><td>//aiplatform.googleapis.com/.../reasoningEngines/6686359456680247296</td><td>All</td></tr>
+      <tr><td>service.name</td><td>6686359456680247296</td><td>All</td></tr>
       <tr><td>telemetry.sdk.name</td><td>opentelemetry</td><td>All</td></tr>
       <tr><td>telemetry.sdk.version</td><td>1.38.0</td><td>All</td></tr>
       <tr><td>gen_ai.system</td><td>gcp.vertex.agent / vertex_ai</td><td>LLM</td></tr>
-      <tr><td>gen_ai.request.model</td><td>gemini-3-flash-preview</td><td>GenerateContent</td></tr>
+      <tr><td>gen_ai.request.model</td><td>gemini-2.0-flash</td><td>GenerateContent</td></tr>
       <tr><td>gen_ai.agent.name</td><td>root_agent</td><td>Agent</td></tr>
       <tr><td>gen_ai.operation.name</td><td>generate_content / execute_tool</td><td>LLM / Tool</td></tr>
       <tr><td>gen_ai.tool.type</td><td>FunctionTool</td><td>Tool</td></tr>
@@ -823,7 +823,7 @@
 <div class="footer">
   <p>Generated from live Cloud Trace API and BigQuery data</p>
   <p class="timestamp">Report Generated: 2026-04-23T18:35:00Z | Project: wortz-project-352116</p>
-  <p style="margin-top:8px">Agent Engine: trends2insights (8788263399906607104) | Vertex AI Agent Engine + Google ADK</p>
+  <p style="margin-top:8px">Agent Engine: Demo Finance Agent ADK v2 (6686359456680247296) | Vertex AI Agent Engine + Google ADK</p>
 </div>
 
 </body>
