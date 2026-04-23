@@ -1,7 +1,0 @@
-{
-  "source_context": "graph TD\n    %% Styles\n    classDef input fill:#e1f5fe,stroke:#01579b,stroke-width:2px,color:#01579b;\n    classDef component fill:#fff3e0,stroke:#e65100,stroke-width:2px,color:#e65100;\n    classDef model fill:#f3e5f5,stroke:#4a148c,stroke-width:2px,color:#4a148c;\n    classDef output fill:#e8f5e9,stroke:#1b5e20,stroke-width:2px,color:#1b5e20;\n\n    A[Agent Session Logs]:::input -->|Extract Prompts & Responses| B(Vertex AI EvalTask):::component\n    B --> C{Custom Rubric Node}:::component\n    C -->|Criteria: Helpfulness| D[Rate: 1 to 5]:::output\n    C -->|Criteria: Conciseness| E[Rate: 1 to 5]:::output\n    B --> X[Base Evals]:::component\n    X -->|BLEU / Exact Match| Y[Algorithmic Baseline]:::output\n    D --> F((Final Quality Score)):::model\n    E --> F\n    Y --> F\n",
-  "communicative_intent": "Qualitative Insights: Custom Evaluation Rubrics & Base Evals",
-  "diagram_type": "methodology",
-  "raw_data": null,
-  "aspect_ratio": null
-}

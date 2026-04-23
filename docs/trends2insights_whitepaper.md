@@ -10,17 +10,15 @@ This whitepaper presents the complete evaluation and tracing analysis for the **
 
 The Demo Finance Agent is an ADK agent that answers Google Cloud billing questions using two tools: `get_billing_status` (lookup account status) and `get_billing_forecast` (project spending trends).
 
-<!-- Screenshot: Agent Engine deployment page for reasoningEngines/9113799655832944640
-     URL: https://console.cloud.google.com/agent-platform/runtimes/locations/us-central1/agent-engines/9113799655832944640?project=wortz-project-352116
-     REPLACE THIS COMMENT with: ![Deployment Details](assets/wp2_header_deployment.png) -->
+![Dashboard Overview](assets/gifs/dashboard_overview.gif)
 
-*Figure 1: Agent Engine deployment metadata — Demo Finance Agent ADK (reasoningEngines/9113799655832944640) running gemini-2.0-flash with OpenTelemetry auto-instrumentation via `AdkApp(enable_tracing=True)` on Agent Engine.*
+*Figure 1: Agent Engine Dashboard > Overview — 10 sessions, 13 agent invocations, token usage by input/output. The agent runs gemini-2.0-flash with OpenTelemetry auto-instrumentation via `AdkApp(enable_tracing=True)`.*
 
 | Property | Value |
 |:---|:---|
 | **Agent Name** | finance_agent |
 | **Display Name** | Demo Finance Agent ADK |
-| **Engine Resource** | `reasoningEngines/9113799655832944640` |
+| **Engine Resource** | `reasoningEngines/6686359456680247296` |
 | **Model** | `gemini-2.0-flash` |
 | **Region** | `us-central1` |
 | **Framework** | Google ADK (Agent Development Kit) |
@@ -80,11 +78,9 @@ POST /api/stream_reasoning_engine          (root, ~4s)
 └── http send (response.body)              (final chunk)
 ```
 
-<!-- Screenshot: Cloud Trace waterfall for the ADK agent
-     URL: https://console.cloud.google.com/traces/list?project=wortz-project-352116 (filter: cloud.resource_id:9113799655832944640)
-     REPLACE THIS COMMENT with: ![Trace Waterfall](assets/wp2_traces_1.png) -->
+![Traces DAG Graph](assets/gifs/traces_dag_graph.gif)
 
-*Figure 2: Cloud Trace waterfall showing a Finance Agent query trace with 8 spans. The root span `POST /api/stream_reasoning_engine` shows the complete request lifecycle from HTTP receive through streaming response chunks.*
+*Figure 2: Trace DAG graph showing the complete execution flow — `invocation` → `invoke_agent finance_agent` → `call_llm` → `generate_content gemini-2.0-flash` + `execute_tool get_billing_forecast` / `execute_tool get_billing_status`. Each span shows duration, service name, and gen_ai.* attributes.*
 
 ### Span Attributes
 
@@ -96,7 +92,7 @@ Every span carries rich resource attributes automatically injected by Agent Engi
 | `cloud.provider` | `gcp` | All |
 | `cloud.account.id` | `wortz-project-352116` | All |
 | `cloud.region` | `us-central1` | All |
-| `cloud.resource_id` | `//aiplatform.googleapis.com/.../reasoningEngines/9113799655832944640` | All |
+| `cloud.resource_id` | `//aiplatform.googleapis.com/.../reasoningEngines/6686359456680247296` | All |
 | `service.name` | `demo-finance-agent` | All |
 | `service.instance.id` | `a1aa6130767b49a4b3802334887651c3-15` | All |
 | `telemetry.sdk.name` | `opentelemetry` | All |
@@ -115,26 +111,56 @@ Every span carries rich resource attributes automatically injected by Agent Engi
 | Total Queries Sent | 15 |
 | Total Traces Generated | 5 (v1 API page) |
 
-<!-- Screenshot: Traces tab in Agent Engine console
-     URL: https://console.cloud.google.com/agent-platform/runtimes/locations/us-central1/agent-engines/9113799655832944640/traces?project=wortz-project-352116
-     REPLACE THIS COMMENT with: ![Traces Tab](assets/wp2_traces_2.png) -->
+![Traces Session List](assets/gifs/traces_session_list.gif)
 
-*Figure 3: Agent Engine Traces tab showing recent traces for the Finance Agent, filtered by `cloud.resource_id` matching the agent resource.*
+*Figure 3: Agent Engine Traces tab — Session view showing 10 traced sessions with avg duration, model calls, tool calls, token usage, and last-active timestamps.*
 
 ---
 
-## 3. Online Evaluators
+## 3. Online Monitors (Online Evaluators)
 
-Online Evaluators are automated, production-grade evaluators that run every 10 minutes against OTEL traces. They score each trace with predefined metrics and surface results in the Agent Engine Evaluation tab.
+Online Monitors continuously assess agent quality in production by scoring live OTEL traces on a fixed schedule. They are the primary mechanism for detecting **quality drift** — observable decreases in agent performance over time caused by changes in user behavior or external data.
 
-### Configuration
+### How Online Monitors Work
 
-We created a single Online Evaluator via the v1beta1 REST API with 4 predefined metrics and 100% trace sampling:
+Online Monitors run on a **fixed 10-minute evaluation loop** with three phases:
+
+1. **Query** — Samples traces from Cloud Trace and logs from Cloud Logging matching the agent's `cloud.resource_id` and any configured filters
+2. **Evaluate** — Runs configured metrics against sampled traces using the Agent Platform Evaluation Service (powered by Gemini)
+3. **Report** — Writes detailed rubric verdicts to Cloud Logging and exports numeric scores to Cloud Monitoring for dashboard visualization
+
+### Console Dashboard Tabs
+
+The Agent Engine console provides several tabs for observing the agent and its evaluation results:
+
+![Dashboard Models](assets/gifs/dashboard_models.gif)
+
+*Figure 4a: Dashboard > Models tab — 38 model calls to gemini-2.0-flash, P95 latency ~826ms, count of calls over time.*
+
+![Dashboard Tools](assets/gifs/dashboard_tools.gif)
+
+*Figure 4b: Dashboard > Tools tab — 15 tool calls across `get_billing_status` and `get_billing_forecast`, with P95 duration and per-tool call counts.*
+
+![Dashboard Usage & Logs](assets/gifs/dashboard_usage_logs.gif)
+
+*Figure 4c: Dashboard > Usage tab (container CPU/memory allocation) and Logs tab (real-time agent logs showing model requests, HTTP responses, and candidateResult payloads).*
+
+![Traces Conversation View](assets/gifs/traces_conversation.gif)
+
+*Figure 4d: Traces > Session Conversation — formatted view showing System Message, Input Message ("Compare the forecast for accounts A100 and B200"), tool calls (`get_billing_forecast` x2), and the agent's final response with forecast comparison.*
+
+![Console Tabs Tour](assets/gifs/console_tabs_tour.gif)
+
+*Figure 4e: Agent Engine console tour — Identity (service account), Security (Model Armor / Agent Gateway), Sessions (session history), and Playground (interactive chat with the deployed agent).*
+
+### Monitor Configuration
+
+We created a single Online Monitor via the v1beta1 REST API with 4 predefined metrics and 100% trace sampling:
 
 ```json
 {
-  "displayName": "Finance Agent Quality Evaluator",
-  "agentResource": "projects/679926387543/locations/us-central1/reasoningEngines/9113799655832944640",
+  "displayName": "Finance Agent Quality Evaluator v2",
+  "agentResource": "projects/679926387543/locations/us-central1/reasoningEngines/6686359456680247296",
   "metricSources": [
     {"metric": {"predefinedMetricSpec": {"metricSpecName": "final_response_quality_v1"}}},
     {"metric": {"predefinedMetricSpec": {"metricSpecName": "hallucination_v1"}}},
@@ -149,34 +175,126 @@ We created a single Online Evaluator via the v1beta1 REST API with 4 predefined 
 }
 ```
 
-### Evaluator Status
+### Monitor Status
 
 | Property | Value |
 |:---|:---|
-| **Evaluator Name** | `onlineEvaluators/6459850715509555200` |
-| **Display Name** | Finance Agent Quality Evaluator |
+| **Monitor Name** | `onlineEvaluators/5991476354263023616` |
+| **Display Name** | Finance Agent Quality Evaluator v2 |
 | **State** | `ACTIVE` |
-| **Created** | 2026-04-23T22:10:49Z |
+| **Created** | 2026-04-23T22:45:33Z |
 | **Sampling** | 100% of traces |
-| **Run Interval** | Every 10 minutes |
+| **Run Interval** | Every 10 minutes (fixed) |
 | **Metrics** | `final_response_quality_v1`, `hallucination_v1`, `safety_v1`, `tool_use_quality_v1` |
 
 ### Available Predefined Metrics
 
-Only 4 metrics are currently supported for Online Evaluators (as of April 2026):
+Only 4 metrics are currently supported for Online Monitors (as of April 2026):
 
-| Metric | What It Measures |
+| Metric | What It Measures | Our Score |
+|:---|:---|:---|
+| `final_response_quality_v1` | Overall quality of the agent's final response | **0.97** avg |
+| `hallucination_v1` | Whether the response contains unsupported claims | **1.00** avg |
+| `safety_v1` | Whether the response is safe and appropriate | **1.00** avg |
+| `tool_use_quality_v1` | Whether tools were used correctly and effectively | **0.89** avg |
+
+### Monitor Configuration Options
+
+| Option | Description |
 |:---|:---|
-| `final_response_quality_v1` | Overall quality of the agent's final response |
-| `hallucination_v1` | Whether the response contains unsupported claims |
-| `safety_v1` | Whether the response is safe and appropriate |
-| `tool_use_quality_v1` | Whether tools were used correctly and effectively |
+| **Sampling percentage** | 1-100% of traces to evaluate per cycle |
+| **Max samples per run** | Cap on evaluations per cycle (cost control) |
+| **Trace filters** | Filter by `duration` or `totalTokenUsage` using numeric predicates (`>`, `<`, `=`, `>=`, `<=`, `!=`) |
+| **Semconv version** | Must be `"1.39.0"` or newer |
+| **Log view** | Custom Cloud Logging view (defaults to `_Default`) |
+| **Trace view** | Custom Cloud Trace view (not yet supported) |
 
-<!-- Screenshot: Evaluation tab in Agent Engine console
-     URL: https://console.cloud.google.com/agent-platform/runtimes/locations/us-central1/agent-engines/9113799655832944640/evaluation?project=wortz-project-352116
-     REPLACE THIS COMMENT with: ![Evaluation Scores](assets/wp2_eval_scores.png) -->
+### Monitor Management
 
-*Figure 4: Agent Engine Evaluation tab showing Online Evaluator scores across the 4 predefined metrics. The evaluator runs every 10 minutes against all OTEL traces.*
+Monitors support these lifecycle operations without deletion:
+
+- **Enable/Disable** — Toggle evaluation on/off
+- **Pause/Resume** — Temporarily stop evaluation
+- **Duplicate** — Create a new monitor with pre-filled settings from an existing one
+- **View Traces** — Jump to filtered traces in the agent's Traces tab
+
+### Required ADK Telemetry Configuration
+
+For online monitors to evaluate ADK agents, two environment variables are required:
+
+```bash
+OTEL_SEMCONV_STABILITY_OPT_IN=gen_ai_latest_experimental
+OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=EVENT_ONLY
+```
+
+These enable the `gen_ai.client.inference.operation.details` event on trace spans, which carries the actual prompt/response content (`gen_ai.input.messages`, `gen_ai.output.messages`, `gen_ai.system_instructions`, `gen_ai.tool.definitions`) that the evaluator needs to score quality, hallucination, safety, and tool use.
+
+Without these env vars, traces will have span-level attributes (`gen_ai.agent.name`, `gen_ai.request.model`, token counts) but the evaluator cannot access the message content and will either fail silently or produce no results.
+
+### Evaluation Results: Cloud Logging vs. Cloud Monitoring
+
+Online monitor results flow through two systems with different latencies:
+
+| System | Data Available | Console Reads From | Status |
+|:---|:---|:---|:---|
+| **Cloud Logging** | Immediately after evaluator run | Logs Explorer | **Working** — 40 scored entries |
+| **Cloud Monitoring** | After metric export (may take multiple cycles) | Dashboard Evaluation tab | **Pending** — not yet populated |
+
+This explains why the Console Evaluation tab may appear blank even though the evaluator is actively producing results. To verify that the monitor is working, query Cloud Logging directly:
+
+```
+resource.type="aiplatform.googleapis.com/ReasoningEngine"
+resource.labels.reasoning_engine_id="6686359456680247296"
+labels."event.name"="gen_ai.evaluation.result"
+```
+
+Or run the programmatic verification script:
+
+```bash
+python3 src/verify_online_monitors.py
+```
+
+### Troubleshooting Monitors
+
+If your Online Monitor is ACTIVE but no results appear:
+
+1. **Verify telemetry** — Check Cloud Trace for traces with `gen_ai.*` attributes
+2. **Check env vars** — Confirm `OTEL_SEMCONV_STABILITY_OPT_IN` and `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT` are set
+3. **Check filters** — Review monitor filter criteria; use the Initial Inspection feature in the console
+4. **Check diagnostic logs** — Search Cloud Logging for:
+   ```
+   resource.type="aiplatform.googleapis.com/OnlineEvaluator"
+   resource.labels.online_evaluator_id="YOUR_MONITOR_ID"
+   ```
+5. **Wait** — Cloud Monitoring metric export may lag behind Cloud Logging by several evaluator cycles
+
+### Sample Evaluation Verdict (from Cloud Logging)
+
+Each evaluation produces a detailed rubric verdict. Here is a real example from our agent:
+
+```json
+{
+  "candidateResult": {
+    "score": 1.0,
+    "rubricVerdicts": [
+      {
+        "verdict": true,
+        "reasoning": "The agent correctly calls get_billing_status with account_id A100.",
+        "evaluatedRubric": {
+          "type": "TECHNICAL_CORRECTNESS:TOOL_CALL",
+          "content": {
+            "property": {
+              "description": "The agent calls the appropriate tool with correct parameters."
+            }
+          }
+        }
+      }
+    ]
+  }
+}
+```
+
+> **Note (April 23, 2026):** The online monitor is ACTIVE and producing evaluation results in Cloud Logging, but results are not yet visible in the Console Evaluation tab. This is expected during initial propagation from Cloud Logging to Cloud Monitoring time series.
 
 ---
 
@@ -236,11 +354,9 @@ The v1.x agent hallucinates instructions (it has no real billing data access) bu
 
 All evaluation results are persisted in BigQuery (`agent_metrics.eval_rubric_results`), enabling longitudinal quality tracking across 5 agent versions.
 
-<!-- Screenshot: BigQuery eval_rubric_results table
-     URL: BigQuery Console > agent_metrics.eval_rubric_results
-     REPLACE THIS COMMENT with: ![Cross-Version Comparison](assets/wp2_analysis_versions.png) -->
+![Cross-Version Comparison](assets/wp2_bigquery_data.png)
 
-*Figure 5: Quality score comparison across 5 agent versions in BigQuery.*
+*Figure 5: Quality score comparison across 5 agent versions in BigQuery (`agent_metrics.eval_rubric_results`).*
 
 | Version | Agent | Mean Score | Evals | Task Type |
 |:---|:---|:---|:---|:---|
@@ -255,10 +371,6 @@ The v2.0.0-adk score is the lowest despite having the most *accurate* responses.
 ---
 
 ## 6. BigQuery Evaluation Data Store
-
-<!-- Screenshot: BigQuery query results showing all evaluations
-     URL: BigQuery Console > SELECT * FROM agent_metrics.eval_rubric_results ORDER BY eval_timestamp DESC
-     REPLACE THIS COMMENT with: ![BigQuery Data](assets/wp2_bigquery_data.png) -->
 
 *Figure 6: Complete BigQuery evaluation data store showing 23 evaluations across 5 agent versions, ordered by timestamp. Table: `wortz-project-352116.agent_metrics.eval_rubric_results`.*
 
@@ -335,4 +447,4 @@ This report demonstrates the complete observability and evaluation pipeline avai
 ---
 
 *Report generated April 23, 2026 from live Cloud Trace API, Online Evaluator API, and BigQuery data.*
-*Agent Engine: Demo Finance Agent ADK (9113799655832944640) | Project: wortz-project-352116 | Region: us-central1*
+*Agent Engine: Demo Finance Agent ADK (6686359456680247296) | Project: wortz-project-352116 | Region: us-central1*

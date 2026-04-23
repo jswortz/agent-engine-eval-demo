@@ -1,7 +1,0 @@
-{
-  "source_context": "sequenceDiagram\n    %%{init: {'theme': 'neutral'}}%%\n    participant Agent as Agent Execution\n    participant OTel as Cloud Trace (OTel)\n    participant Eval as Vertex EvalTask\n    participant BQ as BigQuery (Sink)\n    participant Looker as Looker Dashboards\n    \n    Agent->>OTel: Emit Spans (Latency, Tokens)\n    Agent->>Eval: Send Prompt/Response Pairs\n    Eval-->>Eval: Score via Custom Rubric (1-5 Ratings)\n    Eval->>BQ: pd.DataFrame.to_gbq() append\n    note right of BQ: Data schema includes Timestamp,<br/>Agent_Version, and Eval Scores.\n    Looker->>BQ: Query average scores grouped by time\n    Looker->>OTel: (Optional) Correlate with operational data\n",
-  "communicative_intent": "The BigQuery Sink Architecture",
-  "diagram_type": "methodology",
-  "raw_data": null,
-  "aspect_ratio": null
-}
