@@ -502,11 +502,11 @@ ONLINE MONITOR INTEGRATION TEST
   PASS: Got monitor detail
 
 [3/5] Check evaluation results in Cloud Logging
-  Found 44 evaluation entries
-    final_response_quality_v1: n=11, avg=0.97
-    hallucination_v1:          n=11, avg=1.00
-    safety_v1:                 n=11, avg=1.00
-    tool_use_quality_v1:       n=11, avg=0.83
+  Found 76 evaluation entries
+    final_response_quality_v1: n=19, avg=0.93
+    hallucination_v1:          n=19, avg=1.00
+    safety_v1:                 n=19, avg=1.00
+    tool_use_quality_v1:       n=19, avg=0.81
   PASS
 
 [4/5] Verify monitor state
@@ -560,11 +560,21 @@ resp = requests.post(
 print(resp.json())
 ```
 
-### Querying Evaluation Results
+### Pulling Evaluation Data
 
-Monitor results are in Cloud Logging, not BigQuery. Query them with:
+Monitor results are available from two sources: **Cloud Logging** (immediate) and **BigQuery** (via the `online-eval-to-bq` log sink).
+
+#### From Cloud Logging (Python)
 
 ```python
+import google.auth
+import google.auth.transport.requests
+import requests
+
+credentials, _ = google.auth.default()
+credentials.refresh(google.auth.transport.requests.Request())
+headers = {"Authorization": f"Bearer {credentials.token}", "Content-Type": "application/json"}
+
 body = {
     "resourceNames": ["projects/wortz-project-352116"],
     "filter": (
@@ -573,18 +583,44 @@ body = {
         'labels."event.name"="gen_ai.evaluation.result"'
     ),
     "orderBy": "timestamp desc",
-    "pageSize": 50,
+    "pageSize": 100,
 }
-resp = requests.post(
-    "https://logging.googleapis.com/v2/entries:list",
-    headers=headers, json=body,
-)
+resp = requests.post("https://logging.googleapis.com/v2/entries:list", headers=headers, json=body)
 for entry in resp.json().get("entries", []):
     labels = entry["labels"]
     print(f"{labels['gen_ai.evaluation.name']}: {labels['gen_ai.evaluation.score.value']}")
 ```
 
-Each entry contains:
+#### From BigQuery (SQL)
+
+The Cloud Logging sink `online-eval-to-bq` routes evaluation results to BigQuery automatically. Tables are auto-created per day with the naming pattern `aiplatform_googleapis_com_online_evaluator_YYYYMMDD`:
+
+```sql
+SELECT
+  timestamp,
+  labels.gen_ai_evaluation_name       AS metric,
+  labels.gen_ai_evaluation_score_value AS score,
+  labels.gen_ai_conversation_id       AS conversation_id,
+  labels.online_evaluator             AS evaluator
+FROM `wortz-project-352116.online_eval_results.aiplatform_googleapis_com_online_evaluator_20260423`
+ORDER BY timestamp DESC
+```
+
+Result:
+
+```
++---------------------+---------------------------+-------+---------------------+
+|      timestamp      |          metric           | score |   conversation_id   |
++---------------------+---------------------------+-------+---------------------+
+| 2026-04-23 23:44:37 | final_response_quality_v1 | 1     | 5692909881615450112 |
+| 2026-04-23 23:44:35 | tool_use_quality_v1       | 1     | 8637419612985622528 |
+| 2026-04-23 23:44:33 | final_response_quality_v1 | 1     | 5107441930057285632 |
+| 2026-04-23 23:44:30 | tool_use_quality_v1       | 0.25  | 7349390119557660672 |
+| 2026-04-23 23:44:28 | final_response_quality_v1 | 1     | 6422493021249470464 |
++---------------------+---------------------------+-------+---------------------+
+```
+
+Each log entry contains these labels:
 
 | Label | Example |
 |:---|:---|
@@ -593,6 +629,63 @@ Each entry contains:
 | `gen_ai.conversation.id` | `6982698593647853568` |
 | `online_evaluator` | `projects/.../onlineEvaluators/5991476354263023616` |
 | `gen_ai.system` | `vertex_ai` |
+
+### Evaluation Polling Cadence
+
+The Online Monitor polls for new traces on a **fixed 10-minute cycle**. This is not configurable. Observed evaluation cycles from our deployment:
+
+```
+Cycle 1:  2026-04-23T22:44  —  12 evals (3 traces × 4 metrics)
+Cycle 2:  2026-04-23T22:45  —  28 evals (7 traces × 4 metrics)
+Cycle 3:  2026-04-23T23:20  —   4 evals (1 trace  × 4 metrics)
+Cycle 4:  2026-04-23T23:44  —  32 evals (8 traces × 4 metrics)
+                                ──────
+                       Total:  76 evals across 19 traces
+```
+
+**Key observations:**
+
+1. **Cycles are not exactly 10 minutes apart** — the evaluator runs approximately every 10 minutes, but the actual timestamps depend on when the evaluation service processes the batch. Cycles 1-2 ran within 1 minute of each other because the initial backlog of 10 pre-existing traces was split across two batches.
+
+2. **Each cycle scores ALL new traces since the last run** — when we sent 8 queries at 23:35, the monitor picked up all 8 in cycle 4 (23:44), producing 32 entries (8 × 4 metrics).
+
+3. **Each trace is scored once per metric** — the monitor deduplicates by `conversation_id`. A trace evaluated in cycle 1 will not be re-evaluated in cycle 2.
+
+4. **Scores are per-trace, not aggregated** — each entry is a single (trace, metric) pair. To compute averages, aggregate in your query:
+
+```sql
+SELECT
+  labels.gen_ai_evaluation_name AS metric,
+  COUNT(*) AS n,
+  AVG(CAST(labels.gen_ai_evaluation_score_value AS FLOAT64)) AS avg_score,
+  MIN(CAST(labels.gen_ai_evaluation_score_value AS FLOAT64)) AS min_score,
+  MAX(CAST(labels.gen_ai_evaluation_score_value AS FLOAT64)) AS max_score
+FROM `wortz-project-352116.online_eval_results.aiplatform_googleapis_com_online_evaluator_*`
+GROUP BY metric
+ORDER BY metric
+```
+
+### BigQuery Sink Setup
+
+To route online monitor results to BigQuery, create a Cloud Logging sink:
+
+```bash
+# 1. Create BigQuery dataset
+bq mk --dataset --location=US PROJECT:online_eval_results
+
+# 2. Create logging sink with evaluation result filter
+gcloud logging sinks create online-eval-to-bq \
+  "bigquery.googleapis.com/projects/PROJECT/datasets/online_eval_results" \
+  --project=PROJECT \
+  --log-filter='resource.type="aiplatform.googleapis.com/ReasoningEngine" labels."event.name"="gen_ai.evaluation.result"'
+
+# 3. Grant the sink's service account BigQuery access
+gcloud projects add-iam-policy-binding PROJECT \
+  --member="serviceAccount:SERVICE_ACCOUNT_FROM_STEP_2" \
+  --role="roles/bigquery.dataEditor"
+```
+
+Tables are auto-created and partitioned by day. No schema definition needed — the sink infers it from the log entry structure.
 
 ---
 
@@ -606,7 +699,7 @@ This report demonstrates the complete observability and evaluation pipeline avai
 
 3. **Offline Model-as-a-Judge** — Custom `PointwiseMetric` rubrics for deeper qualitative analysis, revealing that evaluation design matters as much as agent design (the verbosity-bias finding).
 
-4. **BigQuery evaluation sink** — Offline eval scores persisted for longitudinal analysis across 5 agent versions. Online monitor results are in Cloud Logging only — a log sink or Log Analytics link is needed to query them from BigQuery.
+4. **Dual BigQuery sinks** — Offline eval scores in `agent_metrics.eval_rubric_results` (via `pandas-gbq`). Online monitor results in `online_eval_results` (via Cloud Logging sink `online-eval-to-bq`), with auto-created daily tables queryable with standard SQL.
 
 5. **Actionable insight** — Tool-calling agents produce accurate but terse responses that score low on response-only evaluation rubrics. Fix: include prompt context in `input_variables` so the judge evaluates answer *correctness*, not response *length*.
 
