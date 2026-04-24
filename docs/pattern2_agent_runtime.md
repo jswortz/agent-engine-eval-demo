@@ -53,7 +53,8 @@ engine = client.agent_engines.create(
         "env_vars": {
             "GOOGLE_CLOUD_AGENT_ENGINE_ENABLE_TELEMETRY": "true",
             "OTEL_SERVICE_NAME": "demo-finance-agent",
-            "OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT": "true",
+            "OTEL_SEMCONV_STABILITY_OPT_IN": "gen_ai_latest_experimental",
+            "OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT": "EVENT_ONLY",
         },
     },
 )
@@ -63,21 +64,21 @@ engine = client.agent_engines.create(
 
 ## 2. OpenTelemetry Trace Analysis
 
-Agent Engine automatically wraps every ADK agent step in OpenTelemetry spans, providing a complete execution timeline without any custom instrumentation code. We sent 15 queries to the agent, producing traces with `gen_ai.*` semantic convention span attributes.
+Agent Engine automatically wraps every ADK agent step in OpenTelemetry spans, providing a complete execution timeline without any custom instrumentation code. We sent 19 queries to the agent across multiple sessions, producing traces with `gen_ai.*` semantic convention span attributes.
 
 ### Trace Structure
 
-Each query produces a trace with 8 spans following the HTTP/ASGI pattern:
+Each query produces a trace following the ADK execution DAG:
 
 ```
-POST /api/stream_reasoning_engine          (root, ~4s)
-├── http receive                           (request body)
-├── http receive                           (disconnect)
-├── http send (response.start)             (200 OK)
-├── http send (response.body)              (streaming chunks)
-├── http send (response.body)              ...
-├── http send (response.body)              ...
-└── http send (response.body)              (final chunk)
+invocation                                 (root, ~4s)
+├── invoke_agent finance_agent             (agent orchestration)
+│   ├── call_llm                           (LLM reasoning step)
+│   │   └── generate_content gemini-2.0-flash  (model inference)
+│   ├── execute_tool get_billing_status    (tool call, if needed)
+│   ├── call_llm                           (follow-up reasoning)
+│   │   └── generate_content gemini-2.0-flash  (model inference)
+│   └── execute_tool get_billing_forecast  (tool call, if needed)
 ```
 
 ![Traces DAG Graph](assets/gifs/traces_dag_graph.gif)
@@ -108,10 +109,10 @@ Every span carries rich resource attributes automatically injected by Agent Engi
 | Metric | Value |
 |:---|:---|
 | End-to-End Latency (per query) | ~4.0s |
-| HTTP Receive (body parsing) | <1ms |
-| Streaming Response (first byte) | ~3.5s |
-| Total Queries Sent | 15 |
-| Total Traces Generated | 5 (v1 API page) |
+| LLM Inference (generate_content) | ~3.5s |
+| Tool Execution (per tool call) | <100ms |
+| Total Queries Sent | 19 |
+| Total Traces Generated | 19 |
 
 ![Traces Session List](assets/gifs/traces_session_list.gif)
 
@@ -195,10 +196,10 @@ Only 4 metrics are currently supported for Online Monitors (as of April 2026):
 
 | Metric | What It Measures | Our Score |
 |:---|:---|:---|
-| `final_response_quality_v1` | Overall quality of the agent's final response | **0.97** avg |
-| `hallucination_v1` | Whether the response contains unsupported claims | **1.00** avg |
-| `safety_v1` | Whether the response is safe and appropriate | **1.00** avg |
-| `tool_use_quality_v1` | Whether tools were used correctly and effectively | **0.89** avg |
+| `final_response_quality_v1` | Overall quality of the agent's final response | **0.93** avg (n=19) |
+| `hallucination_v1` | Whether the response contains unsupported claims | **1.00** avg (n=19) |
+| `safety_v1` | Whether the response is safe and appropriate | **1.00** avg (n=19) |
+| `tool_use_quality_v1` | Whether tools were used correctly and effectively | **0.81** avg (n=19) |
 
 ### Monitor Configuration Options
 
@@ -239,7 +240,7 @@ Online monitor results flow through two systems with different latencies:
 
 | System | Data Available | Console Reads From | Status |
 |:---|:---|:---|:---|
-| **Cloud Logging** | Immediately after evaluator run | Logs Explorer | **Working** — 40 scored entries |
+| **Cloud Logging** | Immediately after evaluator run | Logs Explorer | **Working** — 76 scored entries |
 | **Cloud Monitoring** | After metric export (may take multiple cycles) | Dashboard Evaluation tab | **Pending** — not yet populated |
 
 This explains why the Console Evaluation tab may appear blank even though the evaluator is actively producing results. To verify that the monitor is working, query Cloud Logging directly:
