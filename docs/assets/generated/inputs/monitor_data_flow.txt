@@ -1,0 +1,27 @@
+This diagram shows the data flow of Online Monitor evaluation results through the system.
+
+Starting point: Agent Runtime with ADK agent producing OTEL traces
+- Each user query generates a trace with gen_ai.* attributes and inference events
+- Traces are stored in Cloud Trace
+
+Online Monitor (10-minute evaluation loop):
+1. QUERY phase: Monitor samples traces from Cloud Trace matching the agent's cloud.resource_id
+2. EVALUATE phase: Evaluation Service (powered by Gemini) scores each sampled trace against 4 predefined metrics:
+   - final_response_quality_v1
+   - hallucination_v1
+   - safety_v1
+   - tool_use_quality_v1
+3. REPORT phase: Results written to two destinations in parallel:
+   a. Cloud Logging (immediate) - detailed rubric verdicts with reasoning per (trace, metric) pair
+   b. Cloud Monitoring (may lag) - numeric score time series for dashboard visualization
+
+Downstream data flows:
+- Cloud Logging → BigQuery (via Cloud Logging sink "online-eval-to-bq")
+  - Auto-created daily tables: aiplatform_googleapis_com_online_evaluator_YYYYMMDD
+  - Queryable with standard SQL for longitudinal analysis
+- Cloud Monitoring → Agent Console Evaluation tab (time-series charts)
+- BigQuery → Looker dashboards for executive reporting
+
+The diagram shows the complete path from live agent traces through automated scoring
+to queryable evaluation data in BigQuery, emphasizing that no custom evaluation
+code is needed — the Online Monitor handles the entire pipeline.

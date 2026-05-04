@@ -1,0 +1,27 @@
+This diagram compares two deployment patterns for AI agents on Google Cloud.
+
+Left side: Cloud Run Deployment Pattern
+- Developer writes agent code in any language (Python, Go, Java, Node.js)
+- Builds a Docker container image
+- Pushes to Artifact Registry
+- Deploys to Cloud Run (serverless containers)
+- Manual OTEL instrumentation required for tracing
+- Traces export to Cloud Trace via OTLP exporter
+- Custom evaluation pipeline needed (EvalTask + pandas-gbq to BigQuery)
+- No built-in Online Monitors
+- Standard Cloud Run dashboard (request count, latency, CPU, memory)
+
+Right side: Agent Runtime Deployment Pattern
+- Developer writes agent code in Python using ADK framework
+- Wraps with AdkApp(enable_tracing=True)
+- Deploys via vertexai.Client SDK (source code + requirements)
+- Agent Runtime auto-instruments all spans with gen_ai.* semantic conventions
+- Traces auto-export to Cloud Trace, Cloud Logging, Cloud Monitoring
+- Built-in Online Monitors score live traces every 10 minutes
+- Agent-specific console dashboard with Models, Tools, Traces, Evaluation tabs
+- Managed services: Sessions, Memory Bank, Code Execution, Agent Gateway
+
+The two patterns share the same ADK agent code but differ in deployment complexity,
+observability automation, and available platform services. Agent Runtime provides
+a higher-level abstraction with more built-in capabilities, while Cloud Run provides
+full infrastructure control and language flexibility.
