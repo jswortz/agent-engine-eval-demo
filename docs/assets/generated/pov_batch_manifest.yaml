@@ -1,0 +1,20 @@
+# Batch manifest for POV documentation diagrams.
+# Run: paperbanana batch --manifest docs/assets/generated/pov_batch_manifest.yaml --output-dir docs/assets/generated/
+#
+# These diagrams accompany the three POV docs:
+#   - pov_cloud_run_vs_agent_runtime.md
+#   - pov_observability.md
+#   - pov_online_monitors.md
+
+items:
+  - input: inputs/cr_vs_art_comparison.txt
+    caption: "Comparison of Cloud Run and Agent Runtime deployment patterns for ADK agents — infrastructure, observability, and evaluation capabilities"
+    id: cr_vs_art_comparison
+
+  - input: inputs/observability_stack.txt
+    caption: "Agent Runtime observability stack — auto-instrumented OTEL spans flow through Cloud Trace, Cloud Logging, and Cloud Monitoring into the unified Agent Console dashboard"
+    id: observability_stack
+
+  - input: inputs/monitor_data_flow.txt
+    caption: "Online Monitor evaluation data flow — from live OTEL traces through automated Gemini-powered scoring to Cloud Logging, Cloud Monitoring, and BigQuery"
+    id: monitor_data_flow
