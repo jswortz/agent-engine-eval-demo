@@ -93,9 +93,9 @@ Agent Runtime is not just a compute runtime — it includes a suite of managed s
 | **Long-term memory** | Build your own ([Memory Bank](https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/memory-bank) can be used from Cloud Run) | [Memory Bank](https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/memory-bank) — auto-extracts user preferences from conversation history |
 | **Code execution sandbox** | Not available natively | [Code Execution](https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/sandbox/code-execution-overview) — secure, isolated sandbox |
 | **Example store** | Not available | [Example Store](https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale) (Preview) — dynamic few-shot retrieval |
-| **Agent identity** | [Service identity](https://docs.cloud.google.com/run/docs/securing/service-identity) for calling Google Cloud APIs | [Agent identity](https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/agent-identity) (Preview) — IAM-based agent identity |
+| **Agent identity** | [Service identity](https://docs.cloud.google.com/run/docs/securing/service-identity) for calling Google Cloud APIs | [Agent identity](https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/agent-identity) (GA; auth manager in Preview) — IAM-based agent identity |
 | **Agent Gateway** | Not available | [Agent Gateway](https://docs.cloud.google.com/gemini-enterprise-agent-platform/govern/gateways/agent-gateway-overview) (Preview) — rules for agentic communications |
-| **Threat detection** | Not available | [Agent Runtime Threat Detection](https://docs.cloud.google.com/security-command-center/docs/agent-engine-threat-detection-overview) (Preview) via Security Command Center |
+| **Threat detection** | [Cloud Run Threat Detection](https://docs.cloud.google.com/security-command-center/docs/cloud-run-threat-detection-overview) (GA) via Security Command Center | [Agent Platform Threat Detection](https://docs.cloud.google.com/security-command-center/docs/agent-platform-threat-detection-overview) (Preview) via Security Command Center — agent-specific detectors |
 | **A2A protocol** | Manual implementation | [Agent2Agent](https://docs.cloud.google.com/gemini-enterprise-agent-platform/build/runtime/create-an-a2a-agent) — built-in support |
 
 *Source: [Gemini Enterprise Agent Platform — Scale](https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale)*
@@ -106,8 +106,8 @@ Agent Runtime is not just a compute runtime — it includes a suite of managed s
 |:---|:---|:---|
 | **VPC-SC** | Supported | Supported |
 | **CMEK** | Supported (via KMS) | Supported (via [Secret Manager](https://docs.cloud.google.com/agent-builder/agent-engine/manage/access#cmek)) |
-| **IAM** | Standard Cloud Run IAM | Standard IAM + agent-level identity (Preview) |
-| **Model Armor** | Integration via [Model Armor API](https://docs.cloud.google.com/model-armor/reference/rest) | Integration via Agent Gateway |
+| **IAM** | Standard Cloud Run IAM | Standard IAM + agent-level identity (GA) |
+| **Model Armor** | [Vertex AI floor settings/templates](https://docs.cloud.google.com/model-armor/model-armor-vertex-integration) (Gemini models), [Model Armor API](https://docs.cloud.google.com/model-armor/sanitize-prompts-responses) (any model) | [Agent Gateway](https://docs.cloud.google.com/model-armor/model-armor-agent-gateway-integration) (Preview), [Vertex AI floor settings/templates](https://docs.cloud.google.com/model-armor/model-armor-vertex-integration) (Gemini models), [Model Armor API](https://docs.cloud.google.com/model-armor/sanitize-prompts-responses) (any model) |
 | **Private networking** | VPC connectors, Private Service Connect | [PSC interface](https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale) for VPC connectivity |
 | **Bidirectional streaming** | WebSockets, SSE, streaming HTTP | [Bidirectional streaming](https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale) support |
 
@@ -147,7 +147,7 @@ Agent Runtime is not just a compute runtime — it includes a suite of managed s
 - **Less infrastructure control** — cannot customize the container image, networking, or compute resources at the same granularity as Cloud Run
 - **Private dependency management** — Cloud Run and GKE offer more direct IAM-based configuration paths for strict security requirements
 - **No custom MCP server hosting** — Agent Runtime manages the runtime for MCP components but doesn't support hosting custom MCP servers
-- **Preview features** — several capabilities (Agent Gateway, Agent Identity, Threat Detection) are in Preview
+- **Preview features** — several capabilities (Agent Gateway, Threat Detection) are in Preview
 
 ---
 
