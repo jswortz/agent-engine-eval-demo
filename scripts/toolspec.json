@@ -1,0 +1,65 @@
+{
+  "tools": [
+    {
+      "name": "get_user_profile",
+      "description": "Gets a user profile from the user database by user_id.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "user_id": {
+            "type": "string",
+            "description": "The user identifier (e.g. 'user-001')."
+          }
+        },
+        "required": ["user_id"]
+      },
+      "annotations": {
+        "title": "Get User Profile",
+        "readOnlyHint": true,
+        "idempotentHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "list_users",
+      "description": "Lists all user IDs and names in the database.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {}
+      },
+      "annotations": {
+        "title": "List Users",
+        "readOnlyHint": true,
+        "idempotentHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "update_user_email",
+      "description": "Updates a user's email address. This is a destructive write operation.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "user_id": {
+            "type": "string",
+            "description": "The user identifier to update."
+          },
+          "new_email": {
+            "type": "string",
+            "description": "The new email address."
+          }
+        },
+        "required": ["user_id", "new_email"]
+      },
+      "annotations": {
+        "title": "Update User Email",
+        "readOnlyHint": false,
+        "idempotentHint": true,
+        "destructiveHint": true,
+        "openWorldHint": false
+      }
+    }
+  ]
+}
